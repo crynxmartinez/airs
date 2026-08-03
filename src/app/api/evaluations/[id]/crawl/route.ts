@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { evidence, title, description, pagesCrawled } = await crawlCompetitor(url);
+    const { evidence, title, description, pagesCrawled, pages } = await crawlCompetitor(url);
 
     run("UPDATE competitors SET title = COALESCE(?, title), description = COALESCE(?, description) WHERE id = ?", [title || null, description || null, competitor_id]);
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     generateFindings(evaluation_id);
     generateRecommendations(evaluation_id);
 
-    return NextResponse.json({ evidence_count: evidence.length, pages_crawled: pagesCrawled, title, description, scored: true });
+    return NextResponse.json({ evidence_count: evidence.length, pages_crawled: pagesCrawled, title, description, pages, scored: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Crawl failed";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -15,6 +15,8 @@ interface Competitor {
   selected: boolean;
   scraped: boolean;
   scraping: boolean;
+  pagesCrawled?: number;
+  jsRendered?: boolean;
 }
 
 interface Suggestion {
@@ -211,7 +213,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
       if (!dbComp) return;
 
-      const res = await fetch("/api/scrape", {
+      const res = await fetch(`/api/evaluations/${evaluationId}/crawl`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -224,13 +226,18 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
       if (data.evidence_count) {
         setEvidenceCount((prev) => prev + data.evidence_count);
       }
-    } catch {
-      // ignore
-    }
 
-    setCompetitors((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, scraping: false, scraped: true } : c))
-    );
+      const jsRendered = data.pages?.some((p: { status: string }) => p.status === "js-rendered");
+
+      setCompetitors((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, scraping: false, scraped: true, pagesCrawled: data.pages_crawled, jsRendered } : c))
+      );
+      return;
+    } catch {
+      setCompetitors((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, scraping: false, scraped: true } : c))
+      );
+    }
   }
 
   async function scrapeAll() {
@@ -536,9 +543,9 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-slate-800">Collect Evidence</h3>
+                <h3 className="text-sm font-medium text-slate-800">Crawl & Collect Evidence</h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Scrape competitor pages to collect evidence automatically
+                  Crawls homepage + about, services, contact pages. Falls back to browser rendering for JS-heavy sites.
                 </p>
               </div>
               <Button onClick={scrapeAll} disabled={scrapingAll || selectedCompetitors.length === 0}>
@@ -547,7 +554,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                 ) : (
                   <ScanLine className="h-4 w-4" />
                 )}
-                Scrape All
+                Crawl All
               </Button>
             </div>
 
@@ -570,19 +577,29 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                     {comp.competitor_name}
                   </span>
                   {comp.scraping ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <span className="text-xs text-slate-400">crawling...</span>
+                    </div>
                   ) : comp.scraped ? (
-                    <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                      <Check className="h-3.5 w-3.5" />
-                      Done
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                        <Check className="h-3.5 w-3.5" />
+                        {comp.pagesCrawled ? `${comp.pagesCrawled} pages` : "Done"}
+                      </span>
+                      {comp.jsRendered && (
+                        <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-600">
+                          JS
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <Button
                       onClick={() => scrapeCompetitor(i)}
                       variant="outline"
                       className="text-xs"
                     >
-                      Scrape
+                      Crawl
                     </Button>
                   )}
                 </div>
