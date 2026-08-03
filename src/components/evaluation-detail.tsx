@@ -7,6 +7,7 @@ import {
   ArrowLeft, Globe, AlertCircle, Loader2,
   RefreshCw, FileText, AlertTriangle, CheckCircle2,
   Lightbulb, ChevronDown, ChevronRight, Target, Trash2,
+  TrendingUp, ArrowRight,
 } from "lucide-react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -82,6 +83,8 @@ export function EvaluationDetail() {
   const [creatingMission, setCreatingMission] = useState(false);
   const [missionError, setMissionError] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [missionExists, setMissionExists] = useState(false);
+  const [checkingMission, setCheckingMission] = useState(true);
 
   const loadData = useCallback(() => {
     Promise.all([
@@ -89,12 +92,15 @@ export function EvaluationDetail() {
       fetch(`/api/evaluations/${evaluationId}/findings`).then((r) => r.json()),
       fetch(`/api/evaluations/${evaluationId}/recommendations`).then((r) => r.json()),
       fetch(`/api/evaluations/${evaluationId}/scores`).then((r) => r.json()),
+      fetch(`/api/missions?evaluation_id=${evaluationId}`).then((r) => r.json()),
     ])
-      .then(([ev, f, r, s]) => {
+      .then(([ev, f, r, s, m]) => {
         setEvaluation(ev);
         setFindings(Array.isArray(f) ? f : []);
         setRecs(Array.isArray(r) ? r : []);
         setScores(Array.isArray(s) ? s : []);
+        setMissionExists(Array.isArray(m) && m.length > 0);
+        setCheckingMission(false);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -133,6 +139,7 @@ export function EvaluationDetail() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create mission");
+      setMissionExists(true);
       window.location.href = `/projects/${projectId}/missions/${data.id}`;
     } catch (err) {
       setMissionError(err instanceof Error ? err.message : "Failed to create mission");
@@ -249,6 +256,76 @@ export function EvaluationDetail() {
             <p className="text-sm font-medium text-red-700">Mission creation failed: {missionError}</p>
           </div>
           <p className="mt-1 text-xs text-red-500">Make sure you have opportunities generated. Try re-scoring first.</p>
+        </div>
+      )}
+
+      {/* Guided Workflow Banner */}
+      {!checkingMission && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">
+                {evaluation.rrs_score !== null ? (missionExists ? <CheckCircle2 className="h-4 w-4" /> : <Target className="h-4 w-4" />) : <RefreshCw className="h-4 w-4" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {evaluation.rrs_score === null
+                    ? "Step 1: Score your evaluation"
+                    : !missionExists
+                      ? "Step 2: Create a mission from your findings"
+                      : "Step 3: Track progress in Benchmarks"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {evaluation.rrs_score === null
+                    ? "Run scoring to generate findings and recommendations"
+                    : !missionExists
+                      ? `${opportunityFindings.length} opportunities found — turn them into an actionable mission`
+                      : "Re-score after completing mission tasks to see your progress"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {evaluation.rrs_score === null && (
+                <Button onClick={handleRescore} disabled={scoring} className="px-3 py-1.5 text-xs">
+                  {scoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Score Now
+                </Button>
+              )}
+              {evaluation.rrs_score !== null && !missionExists && (
+                <Button onClick={handleCreateMission} disabled={creatingMission} className="px-3 py-1.5 text-xs">
+                  {creatingMission ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Target className="h-3.5 w-3.5" />}
+                  Create Mission
+                </Button>
+              )}
+              {missionExists && (
+                <Link href={`/projects/${projectId}/benchmarks`}>
+                  <Button className="px-3 py-1.5 text-xs">
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    View Benchmarks
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+          {/* Progress dots */}
+          <div className="mt-3 flex items-center gap-2">
+            {["Score", "Mission", "Benchmark"].map((label, i) => {
+              const isDone = (i === 0 && evaluation.rrs_score !== null) || (i === 1 && missionExists) || (i === 2 && false);
+              const isCurrent = (i === 0 && evaluation.rrs_score === null) || (i === 1 && evaluation.rrs_score !== null && !missionExists) || (i === 2 && missionExists);
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                    isDone ? "bg-green-500 text-white" : isCurrent ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-400"
+                  }`}>
+                    {isDone ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+                  </div>
+                  <span className={`text-xs ${isDone ? "text-green-600 font-medium" : isCurrent ? "text-blue-700 font-medium" : "text-slate-400"}`}>{label}</span>
+                  {i < 2 && <div className={`h-px w-6 ${isDone ? "bg-green-300" : "bg-slate-200"}`} />}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -436,7 +513,8 @@ export function EvaluationDetail() {
                   <p className="text-sm font-medium text-slate-800">{rec.title}</p>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${rec.priority === "high" ? "bg-red-100 text-red-700" : rec.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-slate-100 text-slate-500"}`}>{rec.priority}</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize">{rec.effort} effort</span>
-                </div>{rec.description && <p className="mt-1 text-sm text-slate-600">{rec.description}</p>}
+                </div>
+                {rec.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-line">{rec.description}</p>}
                 {rec.expected_impact && <p className="mt-1 text-xs font-medium text-green-600">Impact: {rec.expected_impact.replace(/\bD[1-7]\b/g, (m) => dimLabels[legacyMap[m]] || m)}</p>}</div>
               </div></div>
             ))}

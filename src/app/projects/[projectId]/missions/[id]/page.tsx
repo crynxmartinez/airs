@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target, Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target, Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, FileText, TrendingUp, ArrowRight } from "lucide-react";
 import type { Mission, MissionTask } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -164,6 +164,48 @@ export default function MissionDetailPage() {
           <div className="h-3 rounded-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
+
+      {/* Next Step Banner */}
+      {progress > 0 && (
+        <div className={`rounded-xl border p-4 ${progress === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-white ${progress === 100 ? "bg-green-600" : "bg-blue-600"}`}>
+                {progress === 100 ? <CheckCircle2 className="h-4 w-4" /> : <Target className="h-4 w-4" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {progress === 100
+                    ? "All tasks complete! Time to re-score"
+                    : `${done} of ${mission.tasks.length} tasks done`}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {progress === 100
+                    ? "Re-score your evaluation to see improvements, then check Benchmarks"
+                    : "Keep completing tasks and verifying them with Check Website"}
+                </p>
+              </div>
+            </div>
+            {progress === 100 && mission.evaluation_id && (
+              <div className="flex items-center gap-2">
+                <Link href={`/projects/${projectId}/evaluations/${mission.evaluation_id}`}>
+                  <Button variant="outline" className="px-3 py-1.5 text-xs">
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Re-score
+                  </Button>
+                </Link>
+                <Link href={`/projects/${projectId}/benchmarks`}>
+                  <Button className="px-3 py-1.5 text-xs">
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Benchmarks
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Phase Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
