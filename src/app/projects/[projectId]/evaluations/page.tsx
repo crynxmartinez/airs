@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2, RefreshCw } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -47,12 +47,21 @@ export default function ProjectEvaluationsPage() {
             Manage competitor analysis evaluations for this project
           </p>
         </div>
-        <Link href={`/projects/${projectId}/evaluations/new`}>
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Evaluation
-          </Button>
-        </Link>
+        {evaluations.length === 0 ? (
+          <Link href={`/projects/${projectId}/evaluations/new`}>
+            <Button>
+              <Plus className="h-4 w-4" />
+              New Evaluation
+            </Button>
+          </Link>
+        ) : (
+          <Link href={`/projects/${projectId}/evaluations/${evaluations[0].id}`}>
+            <Button>
+              <RefreshCw className="h-4 w-4" />
+              Re-score Evaluation
+            </Button>
+          </Link>
+        )}
       </div>
 
       {evaluations.length > 0 ? (

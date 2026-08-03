@@ -107,12 +107,21 @@ export default function ProjectDashboardPage() {
             <p className="mt-1 text-sm text-slate-500">{project.description}</p>
           )}
         </div>
-        <Link href={`/projects/${projectId}/evaluations/new`}>
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Evaluation
-          </Button>
-        </Link>
+        {evaluations.length === 0 ? (
+          <Link href={`/projects/${projectId}/evaluations/new`}>
+            <Button>
+              <Plus className="h-4 w-4" />
+              New Evaluation
+            </Button>
+          </Link>
+        ) : evaluations[0] && (
+          <Link href={`/projects/${projectId}/evaluations/${evaluations[0].id}`}>
+            <Button>
+              <ClipboardList className="h-4 w-4" />
+              View Evaluation
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Stats */}
@@ -291,7 +300,7 @@ export default function ProjectDashboardPage() {
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-800">Quick Actions</h2>
           {[
-            { label: "New Evaluation", href: `/projects/${projectId}/evaluations/new`, icon: Plus, desc: "Analyze a new search query" },
+            ...(evaluations.length === 0 ? [{ label: "New Evaluation", href: `/projects/${projectId}/evaluations/new`, icon: Plus, desc: "Analyze a new search query" }] : [{ label: "View Evaluation", href: `/projects/${projectId}/evaluations/${evaluations[0]?.id || ""}`, icon: ClipboardList, desc: evaluations[0]?.primary_query || "" }]),
             { label: "View Missions", href: `/projects/${projectId}/missions`, icon: Target, desc: `${missions.length} mission${missions.length !== 1 ? "s" : ""} total` },
             { label: "Check Benchmarks", href: `/projects/${projectId}/benchmarks`, icon: TrendingUp, desc: avgScore ? `Avg score: ${avgScore}` : "No scores yet" },
           ].map((action) => {
