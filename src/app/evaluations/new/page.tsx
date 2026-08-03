@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function Home() {
+export default function NewEvaluationPage() {
   redirect("/dashboard");
 }

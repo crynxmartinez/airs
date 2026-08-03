@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database
+airs.db
+airs.db-journal
+airs.db-wal
+airs.db-shm
+
+# snapshots
+/snapshots/
