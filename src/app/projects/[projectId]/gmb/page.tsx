@@ -72,12 +72,57 @@ interface GmbScrapeAnalysis {
   mostReviewed: GmbBusiness | null;
 }
 
+interface LpsCheck {
+  code: string;
+  label: string;
+  description: string;
+  status: "pass" | "fail" | "warn";
+  value: string;
+  recommendation: string;
+  weight: number;
+  category: "reviews" | "profile" | "ranking" | "engagement";
+}
+
+interface LpsScoreResult {
+  score: number;
+  rating: "excellent" | "good" | "fair" | "poor";
+  checks: LpsCheck[];
+  summary: { passed: number; warnings: number; failed: number };
+  categoryScores: { reviews: number; profile: number; ranking: number; engagement: number };
+}
+
+interface GmbFinding {
+  id: string;
+  type: "weakness" | "gap" | "opportunity" | "strength";
+  category: string;
+  title: string;
+  description: string;
+  impact: "high" | "medium" | "low";
+  metric: string;
+  competitorBenchmark?: string;
+}
+
+interface GmbRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  priority: "critical" | "high" | "medium" | "low";
+  effort: "quick" | "moderate" | "significant";
+  expectedImpact: string;
+  steps: string[];
+  findingIds: string[];
+}
+
 interface GmbScrapeResponse {
   businesses: GmbBusiness[];
   totalFound: number;
   searchQuery: string;
   location: string;
   analysis: GmbScrapeAnalysis;
+  scoreResult: LpsScoreResult;
+  findings: GmbFinding[];
+  recommendations: GmbRecommendation[];
+  auditId: string;
   evaluationId: string;
 }
 
@@ -99,6 +144,33 @@ const categoryLabels = {
   website: "Website Technical",
   content: "Content & Services",
   reviews: "Reviews & Trust",
+};
+
+const lpsCategoryLabels = {
+  reviews: "Reviews",
+  profile: "Profile",
+  ranking: "Ranking",
+  engagement: "Engagement",
+};
+
+const findingTypeConfig = {
+  weakness: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "Weakness" },
+  gap: { color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", label: "Gap" },
+  opportunity: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Opportunity" },
+  strength: { color: "text-green-600", bg: "bg-green-50", border: "border-green-200", label: "Strength" },
+};
+
+const priorityConfig = {
+  critical: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "Critical" },
+  high: { color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", label: "High Priority" },
+  medium: { color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", label: "Medium Priority" },
+  low: { color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200", label: "Low Priority" },
+};
+
+const effortConfig = {
+  quick: "Quick win (< 1 hour)",
+  moderate: "Moderate effort (1-4 hours)",
+  significant: "Significant effort (ongoing)",
 };
 
 export default function GmbProfileAuditPage() {
@@ -507,6 +579,191 @@ export default function GmbProfileAuditPage() {
           </div>
         )}
       </div>
+
+      {/* LPS Score from scrape */}
+      {scrapeData?.scoreResult && !scrapeLoading && (
+        <>
+          {/* LPS Score Card */}
+          <div className={`rounded-2xl border-2 ${ratingConfig[scrapeData.scoreResult.rating].ring} ${ratingConfig[scrapeData.scoreResult.rating].bg} p-6`}>
+            <div className="flex items-center gap-6">
+              <div className="relative flex h-32 w-32 shrink-0 items-center justify-center">
+                <svg className="h-32 w-32 -rotate-90" viewBox="0 0 128 128">
+                  <circle cx="64" cy="64" r="56" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-200" />
+                  <circle
+                    cx="64" cy="64" r="56" fill="none" stroke="currentColor" strokeWidth="8"
+                    className={ratingConfig[scrapeData.scoreResult.rating].color}
+                    strokeDasharray={`${(scrapeData.scoreResult.score / 100) * 351.86} 351.86`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className={`text-3xl font-bold ${ratingConfig[scrapeData.scoreResult.rating].color}`}>{scrapeData.scoreResult.score}</span>
+                  <span className="text-xs text-slate-400">LPS</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <MapPin className={`h-5 w-5 ${ratingConfig[scrapeData.scoreResult.rating].color}`} />
+                  <span className={`text-lg font-bold ${ratingConfig[scrapeData.scoreResult.rating].color}`}>Local Pack Visibility: {ratingConfig[scrapeData.scoreResult.rating].label}</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-600">
+                  {scrapeData.scoreResult.score >= 80
+                    ? "You're well-positioned for local pack. Maintain your GMB profile with regular posts and reviews."
+                    : scrapeData.scoreResult.score >= 60
+                      ? "Good local visibility. Fix the issues below to reach the local pack."
+                      : scrapeData.scoreResult.score >= 40
+                        ? "Significant local SEO gaps. Focus on critical issues to improve Maps ranking."
+                        : "Your GMB profile needs major work. Start with the critical recommendations below."}
+                </p>
+                <div className="mt-3 flex gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-medium text-slate-700">{scrapeData.scoreResult.summary.passed} passed</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                    <span className="text-sm font-medium text-slate-700">{scrapeData.scoreResult.summary.warnings} warnings</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-sm font-medium text-slate-700">{scrapeData.scoreResult.summary.failed} failed</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* LPS Category scores */}
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {Object.entries(scrapeData.scoreResult.categoryScores).map(([key, val]) => {
+                const catColor = val >= 80 ? "text-green-600" : val >= 60 ? "text-blue-600" : val >= 40 ? "text-yellow-600" : "text-red-500";
+                const barColor = val >= 80 ? "bg-green-500" : val >= 60 ? "bg-blue-500" : val >= 40 ? "bg-yellow-500" : "bg-red-500";
+                return (
+                  <div key={key} className="rounded-lg bg-white/80 p-3">
+                    <p className="text-xs font-medium text-slate-500">{lpsCategoryLabels[key as keyof typeof lpsCategoryLabels]}</p>
+                    <p className={`mt-0.5 text-xl font-bold ${catColor}`}>{val}</p>
+                    <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
+                      <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${val}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LPS Checks */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-700">Local Pack Visibility Checks</h2>
+            {scrapeData.scoreResult.checks.map((check) => {
+              const sc = statusConfig[check.status];
+              const Icon = sc.icon;
+              return (
+                <div key={check.code} className={`rounded-xl border ${sc.border} ${sc.bg} p-4`}>
+                  <div className="flex items-start gap-3">
+                    <Icon className={`h-5 w-5 shrink-0 ${sc.color} mt-0.5`} />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-800">{check.label}</p>
+                        <span className="text-xs font-medium text-slate-400">{check.weight} pts</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">{check.description}</p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        <span className="font-medium">Current:</span> {check.value}
+                      </p>
+                      <div className="mt-2 rounded-lg bg-white/80 p-2.5">
+                        <p className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-800">Fix:</span> {check.recommendation}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Findings */}
+          {scrapeData.findings.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-slate-700">GMB Findings ({scrapeData.findings.length})</h2>
+              {scrapeData.findings.map((finding) => {
+                const fc = findingTypeConfig[finding.type];
+                return (
+                  <div key={finding.id} className={`rounded-xl border ${fc.border} ${fc.bg} p-4`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${fc.color} ${fc.bg} border ${fc.border}`}>
+                            {fc.label}
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            finding.impact === "high" ? "bg-red-100 text-red-700" :
+                            finding.impact === "medium" ? "bg-yellow-100 text-yellow-700" :
+                            "bg-slate-100 text-slate-600"
+                          }`}>
+                            {finding.impact} impact
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-sm font-semibold text-slate-800">{finding.title}</p>
+                        <p className="mt-1 text-xs text-slate-600">{finding.description}</p>
+                        {finding.competitorBenchmark && (
+                          <p className="mt-1.5 text-xs text-slate-500">
+                            <span className="font-medium">Benchmark:</span> {finding.competitorBenchmark}
+                          </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] text-slate-400">Metric</p>
+                        <p className="text-sm font-bold text-slate-700">{finding.metric}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Recommendations / Action Plans */}
+          {scrapeData.recommendations.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-slate-700">GMB Action Plans ({scrapeData.recommendations.length})</h2>
+              {scrapeData.recommendations.map((rec) => {
+                const pc = priorityConfig[rec.priority];
+                return (
+                  <div key={rec.id} className={`rounded-xl border ${pc.border} ${pc.bg} p-4`}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${pc.color} ${pc.bg} border ${pc.border}`}>
+                            {pc.label}
+                          </span>
+                          <span className="text-[10px] text-slate-400">{effortConfig[rec.effort]}</span>
+                        </div>
+                        <p className="mt-1.5 text-sm font-semibold text-slate-800">{rec.title}</p>
+                        <p className="mt-1 text-xs text-slate-600">{rec.description}</p>
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          <span className="font-medium">Expected impact:</span> {rec.expectedImpact}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-lg bg-white/80 p-3">
+                      <p className="mb-2 text-xs font-semibold text-slate-700">Steps:</p>
+                      <ol className="space-y-1.5">
+                        {rec.steps.map((step, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
+                              {i + 1}
+                            </span>
+                            {step}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Failed Checks */}
       {failedChecks.length > 0 && (

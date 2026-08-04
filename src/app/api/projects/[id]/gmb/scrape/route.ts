@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { query, run, generateId } from "@/lib/db";
 import type { Evaluation } from "@/types";
 import { scrapeGoogleMaps, analyzeGmbCompetitors } from "@/lib/gmb-scraper";
+import { calculateLpsScore } from "@/lib/gmb-score";
+import { generateGmbFindings } from "@/lib/gmb-findings";
+import { generateGmbRecommendations } from "@/lib/gmb-recommendations";
 
 export async function POST(
   req: NextRequest,
@@ -42,9 +45,82 @@ export async function POST(
       evaluation.digital_asset_url || undefined
     );
 
+    // Calculate LPS score
+    const scoreResult = calculateLpsScore(analysis, result.totalFound);
+
+    // Generate findings
+    const findings = generateGmbFindings(analysis, scoreResult, result.totalFound);
+
+    // Generate recommendations
+    const recommendations = generateGmbRecommendations(findings, analysis);
+
+    // Store in DB
+    const auditId = generateId();
+    run(
+      `INSERT INTO gmb_audits (id, project_id, evaluation_id, search_query, location, lps_score, rating, your_rank, total_found, avg_rating, avg_review_count, findings_json, recommendations_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        auditId,
+        projectId,
+        evaluation.id,
+        searchQuery,
+        location,
+        scoreResult.score,
+        scoreResult.rating,
+        analysis.yourBusiness?.rank || null,
+        result.totalFound,
+        analysis.avgRating,
+        analysis.avgReviewCount,
+        JSON.stringify(findings),
+        JSON.stringify(recommendations),
+      ]
+    );
+
+    // Store businesses
+    for (const biz of result.businesses) {
+      const bizId = generateId();
+      const isYours = analysis.yourBusiness?.placeId === biz.placeId;
+      run(
+        `INSERT INTO gmb_businesses (id, gmb_audit_id, place_id, name, address, phone, website, rating, reviews_count, category_name, categories, is_open, opening_hours, latitude, longitude, url, photo_count, question_count, description, city, state, postal_code, price_level, permanently_closed, rank, is_your_business)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          bizId,
+          auditId,
+          biz.placeId,
+          biz.name,
+          biz.address,
+          biz.phone,
+          biz.website,
+          biz.rating,
+          biz.reviewsCount,
+          biz.categoryName,
+          JSON.stringify(biz.categories),
+          biz.isOpen ? 1 : 0,
+          JSON.stringify(biz.openingHours),
+          biz.latitude,
+          biz.longitude,
+          biz.url,
+          biz.photoCount,
+          biz.questionCount,
+          biz.description,
+          biz.city,
+          biz.state,
+          biz.postalCode,
+          biz.priceLevel,
+          biz.permanentlyClosed ? 1 : 0,
+          biz.rank,
+          isYours ? 1 : 0,
+        ]
+      );
+    }
+
     return NextResponse.json({
       ...result,
       analysis,
+      scoreResult,
+      findings,
+      recommendations,
+      auditId,
       evaluationId: evaluation.id,
     });
   } catch (error) {

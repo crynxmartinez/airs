@@ -134,3 +134,53 @@ CREATE INDEX IF NOT EXISTS idx_score_history_eval ON score_history(evaluation_id
 -- Add target_score column to projects (safe if already exists)
 -- Note: SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we use a pragma check approach
 -- This is handled in db.ts init
+
+-- GMB Analysis tables
+CREATE TABLE IF NOT EXISTS gmb_audits (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  evaluation_id   TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
+  search_query    TEXT NOT NULL,
+  location        TEXT NOT NULL,
+  lps_score       REAL,
+  rating          TEXT,
+  your_rank       INTEGER,
+  total_found     INTEGER,
+  avg_rating      REAL,
+  avg_review_count INTEGER,
+  findings_json   TEXT,
+  recommendations_json TEXT,
+  created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS gmb_businesses (
+  id              TEXT PRIMARY KEY,
+  gmb_audit_id    TEXT REFERENCES gmb_audits(id) ON DELETE CASCADE,
+  place_id        TEXT,
+  name            TEXT NOT NULL,
+  address         TEXT,
+  phone           TEXT,
+  website         TEXT,
+  rating          REAL,
+  reviews_count   INTEGER,
+  category_name   TEXT,
+  categories      TEXT,
+  is_open         INTEGER DEFAULT 1,
+  opening_hours   TEXT,
+  latitude        REAL,
+  longitude       REAL,
+  url             TEXT,
+  photo_count     INTEGER DEFAULT 0,
+  question_count  INTEGER DEFAULT 0,
+  description     TEXT,
+  city            TEXT,
+  state           TEXT,
+  postal_code     TEXT,
+  price_level     TEXT,
+  permanently_closed INTEGER DEFAULT 0,
+  rank            INTEGER,
+  is_your_business INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_gmb_audits_project ON gmb_audits(project_id);
+CREATE INDEX IF NOT EXISTS idx_gmb_businesses_audit ON gmb_businesses(gmb_audit_id);
