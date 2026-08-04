@@ -297,8 +297,8 @@ export default function GmbProfileAuditPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">GMB Profile Audit</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Google My Business Local Search Readiness — {data.primaryQuery}</p>
+            <h1 className="text-2xl font-bold text-slate-900">Maps Audit</h1>
+            <p className="mt-0.5 text-sm text-slate-500">Google Maps Competitor Scan & Local Pack Visibility</p>
           </div>
         </div>
         <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
@@ -307,8 +307,14 @@ export default function GmbProfileAuditPage() {
         </Button>
       </div>
 
-      {/* Score Card */}
-      <div className={`rounded-2xl border-2 ${rc.ring} ${rc.bg} p-6`}>
+      {/* Website GMB Readiness section — from AIRS crawl */}
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-600">Website GMB Readiness</h2>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">from AIRS crawl</span>
+        </div>
+        <div className={`rounded-2xl border-2 ${rc.ring} ${rc.bg} p-6`}>
         <div className="flex items-center gap-6">
           {/* Score circle */}
           <div className="relative flex h-32 w-32 shrink-0 items-center justify-center">
@@ -362,6 +368,7 @@ export default function GmbProfileAuditPage() {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Category Scores */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -380,11 +387,17 @@ export default function GmbProfileAuditPage() {
         })}
       </div>
 
-      {/* GMB Maps Scraper */}
+      {/* Google Maps Competitor Scan — live Apify scan */}
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <Search className="h-4 w-4 text-blue-500" />
+          <h2 className="text-sm font-semibold text-slate-600">Google Maps Competitor Scan</h2>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-600">live data</span>
+        </div>
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-center gap-2 mb-3">
           <Search className="h-5 w-5 text-blue-500" />
-          <h2 className="text-sm font-semibold text-slate-800">Google Maps Competitor Scan</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Scan Google Maps</h2>
         </div>
         <p className="text-xs text-slate-500 mb-4">
           Search Google Maps for businesses ranking in your area. We&apos;ll identify your business, compare against competitors, and show where you rank.
@@ -578,6 +591,7 @@ export default function GmbProfileAuditPage() {
             )}
           </div>
         )}
+      </div>
       </div>
 
       {/* LPS Score from scrape */}
