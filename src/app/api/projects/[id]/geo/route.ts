@@ -5,9 +5,9 @@ import { calculateGeoScore, fetchRobotsTxt, parseRobotsForAiCrawlers } from "@/l
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { projectId } = await params;
+  const { id: projectId } = await params;
 
   const evaluations = query<Evaluation>(
     "SELECT * FROM evaluations WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
