@@ -64,9 +64,9 @@ export function Sidebar() {
 
   // GMB Analysis child items
   const gmbItems = [
-    { label: "Profile Audit", href: `/projects/${activeProjectId}/gmb`, icon: MapPin },
-    { label: "Local Keywords", href: `/projects/${activeProjectId}/gmb/keywords`, icon: TrendingUp },
-    { label: "Reviews", href: `/projects/${activeProjectId}/gmb/reviews`, icon: ClipboardList },
+    { label: "Maps Audit", href: `/projects/${activeProjectId}/gmb`, icon: MapPin },
+    { label: "Action Plans", href: `/projects/${activeProjectId}/gmb/action-plans`, icon: ClipboardList },
+    { label: "Rank Tracking", href: `/projects/${activeProjectId}/gmb/rank-tracking`, icon: TrendingUp },
   ];
 
   // Auto-expand Analysis if any child is active, plus allow manual toggle
