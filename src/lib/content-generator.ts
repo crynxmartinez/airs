@@ -66,16 +66,30 @@ async function researchTopic(
 }
 
 /**
- * Build gap-driven research queries. The research is about THE GAP — what's missing,
- * what competitors fail to answer, what the question needs that nobody provides —
- * not just a generic search about the question topic.
+ * Extract the core topic from a question by stripping question words.
+ * "How much does roof replacement cost?" → "roof replacement cost"
+ * "What are the best roofing materials?" → "best roofing materials"
+ */
+function extractTopic(question: string): string {
+  // Remove leading question words and helper verbs
+  let topic = question
+    .replace(/^(how (much|do|does|many|long|to|can)|what (is|are|was|were|does|do)|why (is|are|does|do)|when (is|are|does|do)|where (is|are|can)|who (is|are|can)|is |are |does |do |can |should |will )\s*/i, "")
+    .replace(/\?$/, "")
+    .trim();
+
+  // If the question was mostly question words, keep the original
+  if (topic.length < 10) topic = question.replace(/\?$/, "").trim();
+
+  return topic;
+}
+
+/**
+ * Build research queries by combining the QUESTION'S TOPIC with the GAP.
  *
- * Strategy:
- * 1. Parse the brief's rationale to understand what specifically is missing
- * 2. Parse the brief's evidence to see what competitors say (and what they don't)
- * 3. Build queries that target the MISSING answer dimension (money, steps, comparison, etc.)
- * 4. Build queries that target weak competitor areas (low specificity, low term coverage)
- * 5. Build queries for the specific gap evidence text
+ * The gap tells us what's missing (no figures, no process, no comparison, etc.)
+ * The topic tells us what the question is about (roof replacement cost, etc.)
+ * Together they form targeted queries like "roof replacement cost per square foot 2025"
+ * instead of just appending "cost pricing data" to the full question.
  */
 function buildGapAwareQueries(
   question: string,
@@ -84,139 +98,131 @@ function buildGapAwareQueries(
   brief?: ContentBrief | null
 ): string[] {
   const queries: string[] = [];
-  const lower = question.toLowerCase();
+  const topic = extractTopic(question);
 
   // --- 1. Core question (always include as baseline) ---
   queries.push(question);
   if (location) {
-    queries.push(`${question} ${location}`);
+    queries.push(`${topic} ${location}`);
   }
 
-  // --- 2. Gap-driven queries from brief rationale ---
-  // The rationale tells us WHAT is missing, e.g.:
-  // "3 of 5 cited sources raise this but none state a figure"
-  // "none of the 5 cited sources address this at all"
+  // --- 2. Combine topic + gap from brief rationale ---
+  // Rationale tells us WHAT is missing. Topic tells us WHAT IT'S ABOUT.
+  // Together: "what it's about + what's missing" = the research target.
   if (brief?.rationale) {
     const rationaleLower = brief.rationale.toLowerCase();
 
-    // If nobody answers at all — research the core topic deeply
+    // Nobody addresses it at all → research the topic comprehensively
     if (rationaleLower.includes("none") && rationaleLower.includes("address")) {
-      queries.push(`${question} comprehensive guide`);
-      queries.push(`${question} detailed explanation`);
+      queries.push(`${topic} comprehensive guide overview`);
+      queries.push(`${topic} detailed explanation everything you need to know`);
     }
 
-    // If they raise it but don't state a figure — research specific numbers/data
+    // They raise it but don't state a figure → research specific numbers FOR THIS TOPIC
     if (rationaleLower.includes("none") && (rationaleLower.includes("figure") || rationaleLower.includes("state"))) {
-      queries.push(`${question} cost pricing data 2025 2026`);
-      queries.push(`${question} average range statistics`);
+      queries.push(`${topic} average cost price range 2025`);
+      queries.push(`${topic} pricing per square foot rates`);
     }
 
-    // If they raise it but don't lay out a process — research step-by-step
+    // They raise it but don't lay out a process → research process FOR THIS TOPIC
     if (rationaleLower.includes("none") && rationaleLower.includes("process")) {
-      queries.push(`${question} step by step process`);
-      queries.push(`${question} how to guide procedure`);
+      queries.push(`${topic} step by step process procedure`);
+      queries.push(`${topic} how to guide walkthrough`);
     }
 
-    // If they raise it but don't directly contrast — research comparisons
+    // They raise it but don't contrast → research comparison FOR THIS TOPIC
     if (rationaleLower.includes("none") && rationaleLower.includes("contrast")) {
-      queries.push(`${question} comparison vs alternatives`);
-      queries.push(`${question} pros cons differences`);
+      queries.push(`${topic} vs alternatives comparison`);
+      queries.push(`${topic} pros cons best options`);
     }
 
-    // If they raise it but don't answer directly — research definitive answers
+    // They raise it but don't answer directly → research definitive answer FOR THIS TOPIC
     if (rationaleLower.includes("none") && rationaleLower.includes("directly")) {
-      queries.push(`${question} yes no answer`);
-      queries.push(`${question} definitive guide`);
+      queries.push(`${topic} yes or no definitive answer`);
+      queries.push(`${topic} facts evidence proof`);
     }
   }
 
-  // --- 3. Answer-type-driven queries ---
-  // The brief's answer_type tells us what dimension of answer is missing
+  // --- 3. Combine topic + answer type (the missing answer dimension) ---
   if (brief?.answer_type) {
     const answerType = brief.answer_type;
-    if (answerType === "money") {
-      queries.push(`${question} cost price how much 2025 2026`);
-      queries.push(`${question} pricing tiers plans`);
-    } else if (answerType === "duration") {
-      queries.push(`${question} how long timeline timeframe`);
-    } else if (answerType === "steps") {
-      queries.push(`${question} step by step process how to`);
-    } else if (answerType === "comparison") {
-      queries.push(`${question} vs compared alternatives best`);
-    } else if (answerType === "count") {
-      queries.push(`${question} how many number statistics`);
-    } else if (answerType === "boolean") {
-      queries.push(`${question} yes no should can`);
-    } else if (answerType === "definition") {
-      queries.push(`${question} what is definition meaning`);
-    } else if (answerType === "entity") {
-      queries.push(`${question} who examples names companies`);
+    const gapQueries: Record<string, string[]> = {
+      money: [`${topic} cost price how much 2025`, `${topic} pricing tiers plans rates`],
+      duration: [`${topic} how long timeline timeframe duration`, `${topic} time it takes`],
+      steps: [`${topic} step by step process how to`, `${topic} procedure walkthrough`],
+      comparison: [`${topic} vs compared alternatives best`, `${topic} options pros cons`],
+      count: [`${topic} how many number statistics`, `${topic} count data`],
+      boolean: [`${topic} yes no should can`, `${topic} facts evidence`],
+      definition: [`${topic} what is definition meaning explained`, `${topic} overview`],
+      entity: [`${topic} who examples names companies providers`, `${topic} top rated best`],
+    };
+    const gapSpecific = gapQueries[answerType];
+    if (gapSpecific) {
+      queries.push(...gapSpecific);
     }
   }
 
-  // --- 4. Coverage-gap-driven queries ---
-  // Use competitor coverage data to find specific weak spots
+  // --- 4. Combine topic + coverage gap weaknesses ---
   if (taskContext && taskContext.coverageGaps.length > 0) {
-    // Find competitors with low specificity — they mention the topic but don't go deep
+    // Low specificity → competitors are vague. Research specific data FOR THIS TOPIC.
     const lowSpecificity = taskContext.coverageGaps.filter((g) => g.specificity < 0.4);
     if (lowSpecificity.length > 0) {
-      // Research for specific data, numbers, examples that competitors lack
-      queries.push(`${question} specific data examples case studies`);
+      queries.push(`${topic} specific data examples case studies real numbers`);
     }
 
-    // Find depth gaps — competitors have thin content
+    // Depth gaps → competitors are thin. Research deep analysis FOR THIS TOPIC.
     const depthGaps = taskContext.coverageGaps.filter(
       (g) => g.level === "depth_gap" || g.level === "thin" || g.level === "none"
     );
     if (depthGaps.length > 0) {
-      queries.push(`${question} in-depth analysis research findings`);
+      queries.push(`${topic} in-depth analysis research findings studies`);
     }
 
-    // If competitors have low term coverage, they're missing key terms
+    // Low term coverage → competitors miss key terms. Research those terms WITH the topic.
     const lowTermCoverage = taskContext.coverageGaps.filter((g) => g.termCoverage < 0.5);
     if (lowTermCoverage.length > 0) {
-      // Research the specific terms/aspects competitors are missing
       const weakHeadings = lowTermCoverage
         .map((g) => g.heading)
         .filter((h): h is string => h !== null && h.length > 3);
       for (const heading of weakHeadings.slice(0, 2)) {
-        queries.push(`${question} ${heading}`);
+        // Combine the topic with the specific heading competitors are missing
+        queries.push(`${topic} ${heading.toLowerCase()}`);
       }
     }
 
-    // Use gap evidence text directly as a search — it describes what's missing
+    // Gap evidence → extract key phrases and combine with topic
     if (taskContext.gapEvidence && taskContext.gapEvidence.length > 20) {
-      // Extract key phrases from gap evidence
       const evidenceWords = taskContext.gapEvidence
         .replace(/[^a-zA-Z0-9\s]/g, " ")
         .split(/\s+/)
         .filter((w) => w.length > 4 && !STOP_WORDS.has(w));
       if (evidenceWords.length >= 3) {
-        const keyPhrase = evidenceWords.slice(0, 5).join(" ");
-        queries.push(`${question} ${keyPhrase}`);
+        const keyPhrase = evidenceWords.slice(0, 4).join(" ");
+        queries.push(`${topic} ${keyPhrase}`);
       }
     }
   }
 
-  // --- 5. Question-type-specific queries (fallback if no gap data) ---
+  // --- 5. Fallback: question-type queries if we don't have enough gap data ---
   if (queries.length < 4) {
+    const lower = question.toLowerCase();
     if (lower.includes("cost") || lower.includes("price") || lower.includes("how much")) {
-      queries.push(`${question} average cost 2025 2026`);
-      queries.push(`${question} pricing comparison`);
+      queries.push(`${topic} average cost 2025 2026`);
+      queries.push(`${topic} pricing comparison`);
     } else if (lower.includes("vs") || lower.includes("compare") || lower.includes("difference")) {
-      queries.push(`${question} comparison`);
-      queries.push(`${question} pros and cons`);
+      queries.push(`${topic} comparison`);
+      queries.push(`${topic} pros and cons`);
     } else if (lower.includes("how to") || lower.includes("guide")) {
-      queries.push(`${question} step by step`);
-      queries.push(`${question} best practices`);
+      queries.push(`${topic} step by step`);
+      queries.push(`${topic} best practices`);
     } else {
-      queries.push(`${question} examples`);
-      queries.push(`${question} case study`);
+      queries.push(`${topic} examples`);
+      queries.push(`${topic} case study`);
     }
   }
 
-  // --- 6. Always add a data/statistics query for authority content ---
-  queries.push(`${question} statistics data research 2025`);
+  // --- 6. Statistics query combining topic + data ---
+  queries.push(`${topic} statistics data research 2025`);
 
   // Deduplicate and limit
   const unique = [...new Set(queries)];
