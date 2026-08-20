@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const competitors = query<Competitor>(
+  const competitors = await query<Competitor>(
     "SELECT * FROM competitors WHERE evaluation_id = ? ORDER BY created_at",
     [id]
   );
@@ -25,14 +25,14 @@ export async function POST(
     const ids: string[] = [];
     for (const item of body) {
       const compId = generateId();
-      run(
+      await run(
         `INSERT INTO competitors (id, evaluation_id, url, competitor_name, title, description, competitor_type)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [compId, id, item.url, item.competitor_name ?? null, item.title ?? null, item.description ?? null, item.competitor_type ?? null]
       );
       ids.push(compId);
     }
-    const inserted = query<Competitor>(
+    const inserted = await query<Competitor>(
       `SELECT * FROM competitors WHERE id IN (${ids.map(() => "?").join(",")})`,
       ids
     );
@@ -40,12 +40,12 @@ export async function POST(
   }
 
   const compId = generateId();
-  run(
+  await run(
     `INSERT INTO competitors (id, evaluation_id, url, competitor_name, title, description, competitor_type)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [compId, id, body.url, body.competitor_name ?? null, body.title ?? null, body.description ?? null, body.competitor_type ?? null]
   );
 
-  const competitor = query<Competitor>("SELECT * FROM competitors WHERE id = ?", [compId]);
+  const competitor = await query<Competitor>("SELECT * FROM competitors WHERE id = ?", [compId]);
   return NextResponse.json(competitor, { status: 201 });
 }

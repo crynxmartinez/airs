@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
 
-  const audits = query<{
+  const audits = await query<{
     id: string;
     search_query: string;
     location: string;

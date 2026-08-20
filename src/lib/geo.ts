@@ -18,80 +18,15 @@ export interface GeoScoreResult {
   summary: { passed: number; warnings: number; failed: number };
 }
 
-const AI_CRAWLERS = [
-  { name: "GPTBot", userAgent: "GPTBot", platform: "ChatGPT" },
-  { name: "PerplexityBot", userAgent: "PerplexityBot", platform: "Perplexity" },
-  { name: "ClaudeBot", userAgent: "ClaudeBot", platform: "Claude" },
-  { name: "Google-Extended", userAgent: "Google-Extended", platform: "Google AI" },
-  { name: "Amazonbot", userAgent: "Amazonbot", platform: "Alexa/Roku" },
-  { name: "Bytespider", userAgent: "Bytespider", platform: "ByteDance" },
-];
+export {
+  AI_CRAWLERS,
+  blocksAreCloudflareManaged,
+  fetchRobotsTxt,
+  parseRobotsForAiCrawlers,
+} from "@/lib/robots";
 
-export async function fetchRobotsTxt(url: string): Promise<string | null> {
-  try {
-    const parsed = new URL(url);
-    const robotsUrl = `${parsed.protocol}//${parsed.hostname}/robots.txt`;
-    const res = await fetch(robotsUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
-    return await res.text();
-  } catch {
-    return null;
-  }
-}
-
-export function parseRobotsForAiCrawlers(robotsTxt: string | null): {
-  allowed: string[];
-  blocked: string[];
-  hasRobotsTxt: boolean;
-} {
-  if (!robotsTxt) {
-    return { allowed: [], blocked: [], hasRobotsTxt: false };
-  }
-
-  const allowed: string[] = [];
-  const blocked: string[] = [];
-
-  for (const crawler of AI_CRAWLERS) {
-    const userAgentPattern = new RegExp(`User-agent:\\s*${crawler.userAgent}`, "i");
-    const match = robotsTxt.match(userAgentPattern);
-
-    if (!match) {
-      // No specific rule for this crawler — check if there's a general * rule
-      const generalMatch = robotsTxt.match(/User-agent:\s*\*/i);
-      if (generalMatch) {
-        const afterGeneral = robotsTxt.substring(generalMatch.index! + generalMatch[0].length);
-        const nextAgentMatch = afterGeneral.match(/User-agent:/i);
-        const section = nextAgentMatch ? afterGeneral.substring(0, nextAgentMatch.index) : afterGeneral;
-        if (/Disallow:\s*\//i.test(section) && !/Disallow:\s*$/i.test(section)) {
-          blocked.push(crawler.platform);
-        } else {
-          allowed.push(crawler.platform);
-        }
-      } else {
-        allowed.push(crawler.platform);
-      }
-      continue;
-    }
-
-    const afterMatch = robotsTxt.substring(match.index! + match[0].length);
-    const nextAgentMatch = afterMatch.match(/User-agent:/i);
-    const section = nextAgentMatch ? afterMatch.substring(0, nextAgentMatch.index) : afterMatch;
-
-    if (/Disallow:\s*\//i.test(section) && !/Disallow:\s*$/i.test(section)) {
-      blocked.push(crawler.platform);
-    } else {
-      allowed.push(crawler.platform);
-    }
-  }
-
-  return { allowed, blocked, hasRobotsTxt: true };
-}
-
-export function calculateGeoScore(evaluationId: string, robotsData?: { allowed: string[]; blocked: string[]; hasRobotsTxt: boolean }): GeoScoreResult {
-  const evidence = query<Evidence>(
+export async function calculateGeoScore(evaluationId: string, robotsData?: { allowed: string[]; blocked: string[]; hasRobotsTxt: boolean }): Promise<GeoScoreResult> {
+  const evidence = await query<Evidence>(
     "SELECT * FROM evidence WHERE evaluation_id = ?",
     [evaluationId]
   );

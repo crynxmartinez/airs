@@ -7,7 +7,7 @@ import {
   ArrowLeft, Globe, AlertCircle, Loader2,
   RefreshCw, FileText, AlertTriangle, CheckCircle2,
   Lightbulb, ChevronDown, ChevronRight, Target, Trash2,
-  TrendingUp, ArrowRight,
+  TrendingUp, ArrowRight, Grid3x3,
 } from "lucide-react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -184,9 +184,19 @@ export function EvaluationDetail() {
   const topCompetitor = [...evaluation.competitors].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
   const bottomCompetitor = [...evaluation.competitors].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
 
-  // Findings: only show opportunities and new standards; exclude old per-competitor "strength" noise
-  const opportunityFindings = findings.filter((f) => f.type === "opportunity" || f.type === "weakness" || f.type === "gap");
-  const standardFindings = findings.filter((f) => f.type === "standard");
+  // "opportunity" is a gap most of the field shares — a genuine opening. "gap" is
+  // parity work the field already has. Legacy rows use weakness/standard.
+  const opportunityFindings = findings.filter((f) => f.type === "opportunity" || f.type === "weakness");
+  const standardFindings = findings.filter((f) => f.type === "gap" || f.type === "standard");
+  const allActionable = [...opportunityFindings, ...standardFindings];
+
+  // Mirrors the scoping rule in lib/findings.ts: gap prevalence is measured over
+  // contestable rivals, falling back to every result when too few are classified.
+  const primaryCompetitors = evaluation.competitors.filter(
+    (c) => c.competitor_type === "direct" || c.competitor_type === "functional" || c.competitor_type === "platform"
+  );
+  const analysisBasisIsFallback =
+    evaluation.competitors.length > 0 && primaryCompetitors.length < 3;
   const highImpact = opportunityFindings.filter((f) => f.impact_level === "high");
   const mediumImpact = opportunityFindings.filter((f) => f.impact_level === "medium");
 
@@ -195,7 +205,7 @@ export function EvaluationDetail() {
       case "high": return highImpact;
       case "medium": return mediumImpact;
       case "standards": return standardFindings;
-      default: return [...opportunityFindings, ...standardFindings];
+      default: return allActionable;
     }
   })();
 
@@ -227,6 +237,12 @@ export function EvaluationDetail() {
             {creatingMission ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
             Create Mission
           </Button>
+          <Link href={`/projects/${projectId}/evaluations/${evaluationId}/coverage`}>
+            <Button variant="outline"><Grid3x3 className="h-4 w-4" />Coverage</Button>
+          </Link>
+          <Link href={`/projects/${projectId}/evaluations/${evaluationId}/briefs`}>
+            <Button variant="outline"><FileText className="h-4 w-4" />Briefs</Button>
+          </Link>
           <Link href={`/projects/${projectId}/evaluations/${evaluationId}/report`}>
             <Button variant="outline"><FileText className="h-4 w-4" />Report</Button>
           </Link>
@@ -279,7 +295,7 @@ export function EvaluationDetail() {
                   {evaluation.rrs_score === null
                     ? "Run scoring to generate findings and recommendations"
                     : !missionExists
-                      ? `${opportunityFindings.length} opportunities found — turn them into an actionable mission`
+                      ? `${allActionable.length} finding${allActionable.length === 1 ? "" : "s"} ready — turn them into an actionable mission`
                       : "Re-score after completing mission tasks to see your progress"}
                 </p>
               </div>
@@ -370,13 +386,17 @@ export function EvaluationDetail() {
             {strongestDims.length > 0 && (
               <p><strong>Doing well:</strong> {strongestDims.map((d) => `${d.label} (${d.avg}/100)`).join(", ")}</p>
             )}
-            {opportunityFindings.length > 0 && (
+            {opportunityFindings.length > 0 ? (
               <p>
                 <strong className="text-blue-600">{opportunityFindings.length} opportunit{opportunityFindings.length > 1 ? "ies" : "y"}</strong> found
-                {opportunityFindings.filter((f) => f.impact_level === "high").length > 0 && (
-                  <> — {opportunityFindings.filter((f) => f.impact_level === "high").length} with high impact</>
-                )}
-                . See recommendations below for what to do about them.
+                {highImpact.length > 0 && <> — {highImpact.length} with high impact</>}
+                {" "}— gaps most of this field shares. See recommendations below.
+              </p>
+            ) : standardFindings.length > 0 && (
+              <p>
+                <strong className="text-slate-700">No majority weakness found</strong> — this field has no gap that most competitors share,
+                so there is no technical opening to exploit here. {standardFindings.length} table-stakes item{standardFindings.length > 1 ? "s" : ""} remain
+                to reach parity. To find a real edge, compete on positioning and content angle, or classify more direct competitors.
               </p>
             )}
             {recs.length > 0 && (
@@ -438,18 +458,26 @@ export function EvaluationDetail() {
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-800">
-              {findingFilter === "all" && `Opportunities (${opportunityFindings.length})`}
+              {findingFilter === "all" && `Findings (${allActionable.length})`}
               {findingFilter === "high" && `Opportunities — High Impact (${highImpact.length})`}
               {findingFilter === "medium" && `Opportunities — Medium Impact (${mediumImpact.length})`}
               {findingFilter === "standards" && `Table Stakes (${standardFindings.length})`}
             </h2>
           </div>
+          {analysisBasisIsFallback && (
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-xs text-amber-800">
+              Measured across all {evaluation.competitors.length} results:{" "}
+              {primaryCompetitors.length === 1 ? "only 1 is" : `only ${primaryCompetitors.length} are`} classified as a
+              direct, functional or platform competitor — too few to analyse alone. Informational results skew gap
+              analysis, so classify more competitors for a sharper read.
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-2.5">
             <button
               onClick={() => setFindingFilter("all")}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${findingFilter === "all" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
             >
-              All ({opportunityFindings.length + standardFindings.length})
+              All ({allActionable.length})
             </button>
             <button
               onClick={() => setFindingFilter("high")}
@@ -482,7 +510,7 @@ export function EvaluationDetail() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{dimLabels[normalizeDimCode(f.dimension_code)] || f.dimension_code || "General"}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium capitalize ${f.impact_level === "high" ? "bg-red-100 text-red-700" : f.impact_level === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{f.type}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${f.impact_level === "high" ? "bg-red-100 text-red-700" : f.impact_level === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{f.type === "gap" || f.type === "standard" ? "Table stakes" : "Opportunity"}</span>
                         {comp && <span className="text-xs text-slate-400">{comp.competitor_name || comp.url}</span>}
                       </div>
                       <p className="mt-1 text-sm text-slate-700">{f.description}</p>

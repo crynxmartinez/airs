@@ -44,31 +44,34 @@ function scoreBooleanEvidence(items: Evidence[]): number {
   return Math.round((positive / total) * 100);
 }
 
-function _scoreNumericEvidence(items: Evidence[], thresholds: { good: number; ok: number }): number {
-  if (items.length === 0) return 0;
-  const values = items
-    .map((i) => parseFloat(i.value || "0"))
-    .filter((v) => !isNaN(v));
-  if (values.length === 0) return 50;
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  if (avg >= thresholds.good) return 90;
-  if (avg >= thresholds.ok) return 65;
-  return 35;
-}
-
-function scoreDimension(category: string, evidence: Evidence[]): number {
-  if (evidence.length === 0) return 0;
+/**
+ * Returns null when there is no evidence for the category. A dimension we could
+ * not measure is not the same as one that failed every check, and scoring it 0
+ * made an un-crawlable competitor look maximally weak.
+ */
+function scoreDimension(category: string, evidence: Evidence[]): number | null {
+  if (evidence.length === 0) return null;
 
   switch (category) {
     case "structural": {
       const headingEv = evidence.filter((e) => e.indicator_code === "ST-01-I01");
+      const h1Ev = evidence.filter((e) => e.indicator_code === "ST-01-I02");
       const navEv = evidence.filter((e) => e.indicator_code === "ST-02-I01");
       const schemaEv = evidence.filter((e) => e.indicator_code === "ST-03-I01");
 
       let score = 0;
+      // A single H1 is the actual signal; a high total heading count means a
+      // richly structured page, so it is no longer penalised.
+      if (h1Ev.length > 0) {
+        score += parseInt(h1Ev[0].value || "0") === 1 ? 20 : 5;
+      }
       if (headingEv.length > 0) {
         const headings = parseInt(headingEv[0].value || "0");
-        score += headings > 0 && headings < 10 ? 40 : headings >= 10 ? 30 : 10;
+        score += headings >= 3 ? 20 : headings > 0 ? 10 : 0;
+      } else if (h1Ev.length === 0) {
+        // Neither heading indicator present (legacy evidence): award the
+        // structural budget neutrally rather than zeroing it.
+        score += 20;
       }
       score += navEv.some((e) => e.value === "true") ? 30 : 0;
       score += schemaEv.some((e) => e.value === "true") ? 30 : 0;
@@ -117,16 +120,17 @@ function scoreDimension(category: string, evidence: Evidence[]): number {
       const httpsEv = evidence.filter((e) => e.indicator_code === "TE-01-I01");
       const loadEv = evidence.filter((e) => e.indicator_code === "TE-02-I01");
       const canonicalEv = evidence.filter((e) => e.indicator_code === "TE-03-I01");
-      const robotsEv = evidence.filter((e) => e.indicator_code === "TE-04-I01");
 
+      // A missing robots meta tag is not a defect — the default is index,follow —
+      // so it no longer carries score. Its 20 points are redistributed across the
+      // three checks that do indicate technical quality.
       let score = 0;
-      score += httpsEv.some((e) => e.value === "true") ? 30 : 0;
+      score += httpsEv.some((e) => e.value === "true") ? 35 : 0;
       if (loadEv.length > 0) {
         const loadTime = parseInt(loadEv[0].value || "99999");
-        score += loadTime < 2000 ? 30 : loadTime < 5000 ? 20 : 5;
+        score += loadTime < 2000 ? 35 : loadTime < 5000 ? 20 : 5;
       }
-      score += canonicalEv.some((e) => e.value === "true") ? 20 : 0;
-      score += robotsEv.some((e) => e.value === "true") ? 20 : 0;
+      score += canonicalEv.some((e) => e.value === "true") ? 30 : 0;
       return Math.min(score, 100);
     }
 
@@ -164,8 +168,8 @@ export interface ScoringResult {
   rating: string;
 }
 
-export function calculateScores(evaluationId: string): ScoringResult[] {
-  const competitors = query<Competitor>(
+export async function calculateScores(evaluationId: string): Promise<ScoringResult[]> {
+  const competitors = await query<Competitor>(
     "SELECT * FROM competitors WHERE evaluation_id = ?",
     [evaluationId]
   );
@@ -173,12 +177,12 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
   if (competitors.length === 0) return [];
 
   // Clear old dimension scores
-  run("DELETE FROM dimension_scores WHERE evaluation_id = ?", [evaluationId]);
+  await run("DELETE FROM dimension_scores WHERE evaluation_id = ?", [evaluationId]);
 
   const results: ScoringResult[] = [];
 
   for (const comp of competitors) {
-    const compEvidence = query<Evidence>(
+    const compEvidence = await query<Evidence>(
       "SELECT * FROM evidence WHERE competitor_id = ?",
       [comp.id]
     );
@@ -190,12 +194,18 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
 
       const dimEvidence = compEvidence.filter((e) => e.category === dim.category);
       const rawScore = scoreDimension(dim.category, dimEvidence);
+
+      // No evidence for this category — leave it unscored rather than recording a
+      // 0 that reads as total failure. The weighted average below renormalises
+      // over whichever dimensions were actually measured.
+      if (rawScore === null) continue;
+
       const confidence = getConfidenceLevel(dimEvidence.length);
 
       dimensionScores.push({ code: dim.code, score: rawScore, confidence });
 
       // Store in DB
-      run(
+      await run(
         "INSERT INTO dimension_scores (id, evaluation_id, competitor_id, dimension_code, score, max_score) VALUES (?, ?, ?, ?, ?, 100)",
         [generateId(), evaluationId, comp.id, dim.code, rawScore]
       );
@@ -206,7 +216,6 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
   }
 
   // Calculate competitive position: how each competitor compares to the average of others
-  const _nonCompetitiveDims = DIMENSIONS.filter((d) => d.code !== "competitive");
   for (let i = 0; i < results.length; i++) {
     const myScores = results[i].dimensionScores;
     const myAvg = myScores.length > 0
@@ -232,7 +241,7 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
     let compScore = 50 + diff * 2; // Scale the difference
     compScore = Math.max(0, Math.min(100, Math.round(compScore)));
 
-    const compEvidence = query<Evidence>(
+    const compEvidence = await query<Evidence>(
       "SELECT * FROM evidence WHERE competitor_id = ?",
       [competitors[i].id]
     );
@@ -240,7 +249,7 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
 
     results[i].dimensionScores.push({ code: "competitive", score: compScore, confidence });
 
-    run(
+    await run(
       "INSERT INTO dimension_scores (id, evaluation_id, competitor_id, dimension_code, score, max_score) VALUES (?, ?, ?, ?, ?, 100)",
       [generateId(), evaluationId, competitors[i].id, "competitive", compScore]
     );
@@ -260,36 +269,30 @@ export function calculateScores(evaluationId: string): ScoringResult[] {
     results[i].rating = getRating(overallScore);
 
     // Update competitor score
-    run("UPDATE competitors SET score = ? WHERE id = ?", [overallScore, competitors[i].id]);
+    await run("UPDATE competitors SET score = ? WHERE id = ?", [overallScore, competitors[i].id]);
   }
 
-  // Update evaluation overall score (average of all competitors)
-  const avgScore = results.length > 0
-    ? Math.round(results.reduce((sum, r) => sum + r.overallScore, 0) / results.length)
+  // The evaluation's RRS describes the competitive field, so your own asset is
+  // scored above (its dimension scores are stored) but excluded from the average.
+  const fieldResults = results.filter((r) => {
+    const comp = competitors.find((c) => c.id === r.competitorId);
+    return comp?.competitor_type !== "self";
+  });
+
+  const avgScore = fieldResults.length > 0
+    ? Math.round(fieldResults.reduce((sum, r) => sum + r.overallScore, 0) / fieldResults.length)
     : 0;
 
-  const totalEvidence = query<{ count: number }>(
+  const totalEvidence = (await query<{ count: number }>(
     "SELECT COUNT(*) as count FROM evidence WHERE evaluation_id = ?",
     [evaluationId]
-  )[0]?.count || 0;
+  ))[0]?.count || 0;
 
   const confidenceScore = totalEvidence >= 20 ? 90 : totalEvidence >= 10 ? 70 : totalEvidence >= 5 ? 50 : 30;
 
-  run(
-    "UPDATE evaluations SET rrs_score = ?, confidence_score = ?, rating = ?, status = 'completed', updated_at = datetime('now') WHERE id = ?",
+  await run(
+    "UPDATE evaluations SET rrs_score = ?, confidence_score = ?, rating = ?, status = 'completed', updated_at = to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = ?",
     [avgScore, confidenceScore, getRating(avgScore), evaluationId]
-  );
-
-  // Record score history for benchmark tracking
-  const dimensionSummary = DIMENSIONS.map((dim) => {
-    const dimScores = results.flatMap((r) => r.dimensionScores.filter((ds) => ds.code === dim.code).map((ds) => ds.score));
-    const avg = dimScores.length > 0 ? Math.round(dimScores.reduce((a, b) => a + b, 0) / dimScores.length) : 0;
-    return { code: dim.code, score: avg };
-  });
-
-  run(
-    "INSERT INTO score_history (id, evaluation_id, rrs_score, rating, dimension_scores) VALUES (?, ?, ?, ?, ?)",
-    [generateId(), evaluationId, avgScore, getRating(avgScore), JSON.stringify(dimensionSummary)]
   );
 
   return results;

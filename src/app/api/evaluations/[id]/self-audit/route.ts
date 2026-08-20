@@ -18,7 +18,7 @@ export async function POST(
     const { evidence: myEvidence, title, description } = await scrapePage(url);
 
     // Get competitor evidence for comparison
-    const competitorEvidence = query<Evidence>(
+    const competitorEvidence = await query<Evidence>(
       "SELECT * FROM evidence WHERE evaluation_id = ?",
       [evaluationId]
     );

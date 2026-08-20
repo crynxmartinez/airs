@@ -9,7 +9,7 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
 
-  const evaluations = query<Evaluation>(
+  const evaluations = await query<Evaluation>(
     "SELECT * FROM evaluations WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
     [projectId]
   );
@@ -19,7 +19,7 @@ export async function GET(
   }
 
   const evaluation = evaluations[0];
-  const result = calculateGmbScore(evaluation.id);
+  const result = await calculateGmbScore(evaluation.id);
 
   return NextResponse.json({
     ...result,

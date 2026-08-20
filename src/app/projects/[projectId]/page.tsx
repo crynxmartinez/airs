@@ -47,6 +47,12 @@ interface ProjectStats {
     created_at: string;
   }[];
   evaluations: { id: string; primary_query: string; status: string; rrs_score: number | null; created_at: string }[];
+  citationShare: {
+    totalQueries: number;
+    citedQueries: number;
+    citationShare: number;
+    perEngine: { engine: string; total: number; cited: number; share: number }[];
+  };
 }
 
 function scoreColor(score: number | null): string {
@@ -230,6 +236,51 @@ export default function ProjectDashboardPage() {
                     <span className="text-sm font-medium text-slate-700">{scores.gmbLps ? "LPS" : "GMB"} <span className={scoreColor(scores.gmbLps || scores.gmb)}>{scores.gmbLps || scores.gmb}</span></span>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Citation Share — AI visibility headline metric */}
+      {data.citationShare && data.citationShare.totalQueries > 0 && (
+        <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-6">
+          <div className="flex items-center gap-6">
+            <div className="relative flex h-32 w-32 shrink-0 items-center justify-center">
+              <svg className="h-32 w-32 -rotate-90" viewBox="0 0 128 128">
+                <circle cx="64" cy="64" r="56" fill="none" stroke="currentColor" strokeWidth="8" className="text-indigo-100" />
+                <circle
+                  cx="64" cy="64" r="56" fill="none" stroke="currentColor" strokeWidth="8"
+                  className="text-indigo-600"
+                  strokeDasharray={`${data.citationShare.citationShare * 351.86} 351.86`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center">
+                <span className="text-3xl font-bold text-indigo-600">
+                  {Math.round(data.citationShare.citationShare * 100)}%
+                </span>
+                <span className="text-xs text-indigo-400">cited</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-indigo-600" />
+                <span className="text-lg font-bold text-indigo-900">Citation Share</span>
+              </div>
+              <p className="mt-1 text-sm text-indigo-700">
+                Your site is cited in {data.citationShare.citedQueries} of {data.citationShare.totalQueries} tracked AI queries.
+                This is the headline metric — it measures real AI answer capture, not proxy scores.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {data.citationShare.perEngine.map((e) => (
+                  <div key={e.engine} className="rounded-lg bg-white/80 px-3 py-1.5">
+                    <span className="text-xs font-medium text-indigo-700 capitalize">{e.engine}</span>
+                    <span className="ml-2 text-sm font-bold text-indigo-900">
+                      {e.cited}/{e.total} ({Math.round(e.share * 100)}%)
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

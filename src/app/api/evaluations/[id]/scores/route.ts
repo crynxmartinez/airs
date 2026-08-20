@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const scores = query<DimensionScore & { competitor_name: string | null }>(
+  const scores = await query<DimensionScore & { competitor_name: string | null }>(
     `SELECT ds.*, c.competitor_name 
      FROM dimension_scores ds 
      JOIN competitors c ON ds.competitor_id = c.id 

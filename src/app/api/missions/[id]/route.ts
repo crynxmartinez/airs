@@ -7,10 +7,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const mission = queryOne<Mission & { audit_data: string | null }>("SELECT * FROM missions WHERE id = ?", [id]);
+  const mission = await queryOne<Mission & { audit_data: string | null }>("SELECT * FROM missions WHERE id = ?", [id]);
   if (!mission) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const tasks = query<MissionTask>("SELECT * FROM mission_tasks WHERE mission_id = ?", [id]);
-  const evaluation = queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [mission.evaluation_id]);
+  const tasks = await query<MissionTask>("SELECT * FROM mission_tasks WHERE mission_id = ?", [id]);
+  const evaluation = await queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [mission.evaluation_id]);
   const auditData = mission.audit_data ? JSON.parse(mission.audit_data) : null;
   return NextResponse.json({ ...mission, tasks, site_url: evaluation?.digital_asset_url || null, audit_data: auditData });
 }
@@ -21,10 +21,23 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await req.json();
-  if (body.status) {
-    run("UPDATE missions SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN datetime('now') ELSE NULL END WHERE id = ?", [body.status, body.status, id]);
+
+  if (body.name) {
+    await run("UPDATE missions SET name = ? WHERE id = ?", [body.name, id]);
   }
-  const mission = queryOne<Mission>("SELECT * FROM missions WHERE id = ?", [id]);
+
+  if (body.status) {
+    // When activating a mission, deactivate all other missions for the same evaluation
+    if (body.status === "active") {
+      const mission = await queryOne<Mission>("SELECT evaluation_id FROM missions WHERE id = ?", [id]);
+      if (mission) {
+        await run("UPDATE missions SET status = 'inactive' WHERE evaluation_id = ? AND id != ? AND status = 'active'", [mission.evaluation_id, id]);
+      }
+    }
+    await run("UPDATE missions SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END WHERE id = ?", [body.status, body.status, id]);
+  }
+
+  const mission = await queryOne<Mission>("SELECT * FROM missions WHERE id = ?", [id]);
   return NextResponse.json(mission);
 }
 
@@ -33,6 +46,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  run("DELETE FROM missions WHERE id = ?", [id]);
+  await run("DELETE FROM missions WHERE id = ?", [id]);
   return NextResponse.json({ success: true });
 }

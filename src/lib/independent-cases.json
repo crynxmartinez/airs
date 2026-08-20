@@ -1,0 +1,926 @@
+[
+  {
+    "domain": "physiotherapy",
+    "title": "Initial Consultation & Fees | Riverbend Physiotherapy",
+    "question": "How much does an initial physiotherapy consultation cost?",
+    "passages": [
+      {
+        "heading": "Initial Consultation & Fees | Riverbend Physiotherapy",
+        "text": ""
+      },
+      {
+        "heading": "Your first appointment",
+        "text": "Your initial consultation runs for 45 minutes. We take a full history, assess your movement and strength, and start hands-on treatment the same visit. You'll leave with a home exercise program in our app."
+      },
+      {
+        "heading": "Fees",
+        "text": "Initial consultation (45 min) — $135. Standard follow-up (30 min) — $95. Extended follow-up (45 min) — $130. Exercise physiology initial — $120. Payment is taken at the end of your appointment by card or HICAPS."
+      },
+      {
+        "heading": "Private health and referrals",
+        "text": "We have HICAPS on site so you can claim your private health rebate instantly and only pay the gap. You do not need a GP referral to see a physiotherapist. If you have a Chronic Disease Management plan, ask reception before you book."
+      }
+    ],
+    "expected": "answered",
+    "why": "The Fees section commits to an explicit dollar figure ($135) for the initial consultation, which is exactly the money-shaped fact the question demands."
+  },
+  {
+    "domain": "optometry",
+    "title": "Bulk Billed Eye Tests | Clearview Optometrists",
+    "question": "Is an eye test covered by Medicare, or do I have to pay?",
+    "passages": [
+      {
+        "heading": "Bulk Billed Eye Tests | Clearview Optometrists",
+        "text": ""
+      },
+      {
+        "heading": "Comprehensive eye examinations",
+        "text": "A full eye examination at Clearview takes about 30 minutes and includes visual acuity, refraction, intraocular pressure, and retinal imaging with our OCT scanner."
+      },
+      {
+        "heading": "Medicare and bulk billing",
+        "text": "Yes — we bulk bill comprehensive eye examinations directly to Medicare for all patients with a valid Medicare card, so there is no out-of-pocket cost to you for the test itself. Just bring your card to your appointment. Medicare covers a full examination every three years for patients under 65, and annually for patients 65 and over."
+      },
+      {
+        "heading": "What isn't covered",
+        "text": "Optional retinal photography and dry eye assessments are not claimable through Medicare; these are charged separately. Spectacles and contact lenses are not covered by Medicare but may be claimable through your private health extras."
+      }
+    ],
+    "expected": "answered",
+    "why": "A boolean question gets a direct yes plus the condition attached to it (valid Medicare card, no out-of-pocket for the exam), so the required commitment is present."
+  },
+  {
+    "domain": "mental-health counselling",
+    "title": "Fees & Rebates | Ashgrove Counselling Practice",
+    "question": "How much is a counselling session?",
+    "passages": [
+      {
+        "heading": "Fees & Rebates | Ashgrove Counselling Practice",
+        "text": ""
+      },
+      {
+        "heading": "Our approach to fees",
+        "text": "We believe therapy should be accessible. Our fees are set with reference to the recommended schedule for our profession and are reviewed each year. We know cost is one of the biggest reasons people delay reaching out, and we do our best to keep our practice affordable."
+      },
+      {
+        "heading": "Medicare rebates",
+        "text": "With a Mental Health Treatment Plan from your GP you can claim a rebate for up to 10 individual sessions per calendar year. The rebate is processed on the day of your session and usually lands in your nominated account within two business days. You will still have a gap payment to make."
+      },
+      {
+        "heading": "Concessions and payment",
+        "text": "A limited number of reduced-fee places are available for students, pensioners and health care card holders. We accept card, bank transfer and can invoice your NDIS plan manager where relevant. Please speak with our practice manager about current fees and whether a concession place is available when you enquire."
+      },
+      {
+        "heading": "Cancellation policy",
+        "text": "We ask for 48 hours' notice to change or cancel an appointment. Late cancellations attract a fee, as the time has been held for you and cannot usually be reallocated."
+      }
+    ],
+    "expected": "lexical",
+    "why": "Fees are discussed at length across four sections — rebates, concessions, cancellation charges — but the page never states a dollar amount, so the money fact the question needs is absent."
+  },
+  {
+    "domain": "aged care",
+    "title": "Home Care Packages Explained | Willowvale Community Care",
+    "question": "How long does it take to get approved for a Home Care Package?",
+    "passages": [
+      {
+        "heading": "Home Care Packages Explained | Willowvale Community Care",
+        "text": ""
+      },
+      {
+        "heading": "What is a Home Care Package?",
+        "text": "A Home Care Package is government-subsidised funding that helps you stay living safely in your own home. Packages come in four levels, from basic support needs through to high care needs, and can cover personal care, nursing, allied health, domestic assistance, transport and home modifications."
+      },
+      {
+        "heading": "Getting assessed",
+        "text": "The first step is an assessment. You or a family member contacts My Aged Care, and an assessor visits you at home to talk through how you're managing day to day. Once the assessment is complete you receive a letter confirming your approval and the package level you've been approved for. From there you are placed in the national queue until a package is assigned to you."
+      },
+      {
+        "heading": "While you wait",
+        "text": "Waiting can be a frustrating time, and we don't want you going without support. Many of our clients start with Commonwealth Home Support Programme services or a short period of privately funded care so help is in place sooner. Our care advisors will sit down with you and map out what to do in the meantime."
+      },
+      {
+        "heading": "Choosing Willowvale as your provider",
+        "text": "You are free to choose any approved provider. When your package is assigned, call us and we will arrange a home visit, agree on a care plan and get your services started."
+      },
+      {
+        "heading": "Talk to us",
+        "text": "Our intake team can walk you through the whole process. Call our office and ask for the aged care advisory line."
+      }
+    ],
+    "expected": "lexical",
+    "why": "The page walks through every stage of the approval journey and even acknowledges the wait, but never gives a timeframe in weeks or months, so the duration the question asks for is missing."
+  },
+  {
+    "domain": "pharmacy",
+    "title": "Webster-Pak Medication Packing | Hartley Street Pharmacy",
+    "question": "What are the steps to set up a Webster-pak for my mother?",
+    "passages": [
+      {
+        "heading": "Webster-Pak Medication Packing | Hartley Street Pharmacy",
+        "text": ""
+      },
+      {
+        "heading": "Why blister packing helps",
+        "text": "A Webster-pak sorts a week of medicines into sealed blisters by day and time of day, so there is no guesswork about whether a dose has been taken. It is especially helpful for people managing several medicines, for carers, and for anyone with memory changes."
+      },
+      {
+        "heading": "How to get started",
+        "text": "1. Call or come into the pharmacy and let our dispensary team know you would like packing set up. 2. Bring in all current medicines, including anything from another pharmacy, plus vitamins and supplements. 3. Our pharmacist reviews the full list against your mother's latest prescriptions and contacts her GP to confirm the current regimen and resolve any discrepancies. 4. We prepare the first pack and you collect it, or we add your address to our free local delivery run. 5. From then on we prompt you when the next pack is ready and manage repeat prescriptions with the surgery."
+      },
+      {
+        "heading": "Cost and delivery",
+        "text": "Packing is provided at no charge for concession card holders. Local delivery within 5km is free on weekdays. You continue to pay only the normal cost of the medicines themselves."
+      },
+      {
+        "heading": "Changes to medicines",
+        "text": "If a doctor or hospital changes a medicine, phone us straight away and do not alter the pack yourself. We will re-pack and dispose of the superseded pack safely."
+      }
+    ],
+    "expected": "answered",
+    "why": "The question demands an ordered process and the page supplies an explicit numbered five-step sequence from first contact through ongoing repacking."
+  },
+  {
+    "domain": "optometry",
+    "title": "Contact Lenses vs Glasses | Northgate Eyecare",
+    "question": "Are daily disposable contact lenses better than monthly lenses?",
+    "passages": [
+      {
+        "heading": "Contact Lenses vs Glasses | Northgate Eyecare",
+        "text": ""
+      },
+      {
+        "heading": "Contact lens options",
+        "text": "We fit soft daily disposables, soft monthly lenses, toric lenses for astigmatism, multifocal contacts for over-40s, and rigid gas permeable lenses for keratoconus and irregular corneas."
+      },
+      {
+        "heading": "Dailies compared with monthlies",
+        "text": "Daily disposables are opened fresh each morning and thrown out at night — no cleaning solution, no case, and the lowest risk of deposit build-up and lens-related infection, which makes them our usual recommendation for part-time wear, sport, travel and hay fever season. Monthly lenses cost less per day of wear if you wear lenses every day, and a wider range of prescriptions and designs is available in monthly, including most complex torics. The trade-off is that monthlies require nightly cleaning and disinfecting and must be replaced strictly on schedule. For a full-time wearer with a straightforward prescription, monthlies are usually the more economical choice; for anyone wearing lenses two or three days a week, dailies work out cheaper and safer."
+      },
+      {
+        "heading": "Contact lens fittings",
+        "text": "A fitting appointment includes corneal measurements, a trial pair, teaching you insertion and removal, and a follow-up check two weeks later to confirm the fit and your comfort."
+      }
+    ],
+    "expected": "answered",
+    "why": "A comparison question is satisfied here: the page sets the two options against each other on hygiene, cost per wear, prescription range and maintenance, and states which suits which wearer."
+  },
+  {
+    "domain": "physiotherapy",
+    "title": "Vestibular Rehabilitation | Coastline Physio & Rehab",
+    "question": "How many sessions of vestibular rehab will I need for BPPV?",
+    "passages": [
+      {
+        "heading": "Vestibular Rehabilitation | Coastline Physio & Rehab",
+        "text": ""
+      },
+      {
+        "heading": "Dizziness and vertigo",
+        "text": "Vertigo is the sensation that you or the room is spinning. The most common cause is benign paroxysmal positional vertigo (BPPV), where crystals in the inner ear move into a balance canal and send false signals to the brain about head position."
+      },
+      {
+        "heading": "Assessment",
+        "text": "Our vestibular-trained physiotherapists use the Dix-Hallpike and roll tests with infrared goggles to identify which canal is involved. We also screen your neck, eye movements and balance to rule out other causes of dizziness."
+      },
+      {
+        "heading": "Treatment",
+        "text": "BPPV is treated with repositioning manoeuvres such as the Epley, performed in the clinic, which guide the displaced crystals back out of the canal. Most people notice a marked change in their symptoms quite quickly. We follow up with gaze stabilisation and balance retraining exercises to do at home, and we retest at your next visit to confirm the canal has cleared. Occasionally symptoms recur and further treatment is needed."
+      },
+      {
+        "heading": "Booking",
+        "text": "Vestibular assessments are booked as an extended initial appointment. Please arrange a lift home, as you may feel briefly unsteady after a manoeuvre."
+      }
+    ],
+    "expected": "lexical",
+    "why": "BPPV treatment is described in clinical detail but the page only says symptoms change \"quite quickly\" and may recur, never giving a session count, so the count fact is absent."
+  },
+  {
+    "domain": "aged care",
+    "title": "Respite Care | Marrenvale Aged Care Home",
+    "question": "Do you have a secure dementia wing with a locked garden?",
+    "passages": [
+      {
+        "heading": "Respite Care | Marrenvale Aged Care Home",
+        "text": ""
+      },
+      {
+        "heading": "About respite",
+        "text": "Respite gives carers a planned break and gives your loved one a chance to try residential living. Respite guests join in all the activities of the home and are cared for by the same registered nurses and care staff as our permanent residents."
+      },
+      {
+        "heading": "What's included",
+        "text": "A furnished private room with ensuite, all meals prepared in our kitchen by our chef, laundry, and access to our physiotherapy and podiatry visits. Bring your own medicines in their original packaging along with a current medication list."
+      },
+      {
+        "heading": "Booking a respite stay",
+        "text": "Respite is subsidised for up to 63 days per financial year once you have an aged care assessment approving residential respite. Bookings are made through our admissions coordinator and we suggest booking well ahead for school holidays and December."
+      },
+      {
+        "heading": "A day at Marrenvale",
+        "text": "Mornings start with a cooked breakfast in the dining room. Our lifestyle team runs armchair exercise, choir, gardening club, bus outings and a weekly happy hour. Families are welcome to visit any time and to join residents for lunch."
+      }
+    ],
+    "expected": "none",
+    "why": "Nothing on this respite page mentions dementia-specific accommodation, secure units, or outdoor areas at all, so the topic itself is uncovered rather than merely shallow."
+  },
+  {
+    "domain": "commercial cleaning",
+    "title": "Office Cleaning Contracts | Meridian Facilities Services",
+    "question": "How much does nightly office cleaning cost per month?",
+    "expected": "lexical",
+    "why": "An entire section is devoted to how the contract is priced, yet the page never commits to a single rate, figure or range, so the money fact the question demands is absent.",
+    "passages": [
+      {
+        "heading": "Office Cleaning Contracts | Meridian Facilities Services",
+        "text": ""
+      },
+      {
+        "heading": "Cleaning that fits your building",
+        "text": "We deliver daily and out-of-hours office cleaning across Greater Manchester and Cheshire, from single-floor serviced suites to 40,000 sq ft headquarters buildings. Every contract is built around your occupancy pattern, your out-of-hours access arrangements and the standard your landlord expects to see at inspection."
+      },
+      {
+        "heading": "How we price your contract",
+        "text": "There is no such thing as a standard office clean, which is why we do not publish a price list. Your cost is driven by cleanable area, the frequency you need, the number of washrooms and kitchens, and whether the building needs a daytime housekeeper as well as an evening team. We benchmark every quotation against local labour rates so you can be confident the figure is competitive and, just as importantly, that it is deliverable. Underpriced contracts are the single biggest reason cleaning standards slip in year two, and we would rather lose a tender than win it on a number we cannot staff."
+      },
+      {
+        "heading": "What is included",
+        "text": "Consumables, machinery, COSHH-compliant chemicals, TUPE handling where staff transfer to us, and full public and employers' liability cover are all included in your monthly invoice. Periodic works such as high-level dusting, washroom deep cleans and carpet extraction are scheduled into the annual specification from day one rather than billed as extras."
+      },
+      {
+        "heading": "Arrange a site survey",
+        "text": "A regional manager will walk the building with you, measure up and issue a written quotation, normally within three working days of the visit. Contracts are invoiced monthly in arrears with 90 days' notice on either side."
+      }
+    ]
+  },
+  {
+    "domain": "freight forwarding",
+    "title": "Sea Freight from China to the UK | Harbourline Logistics",
+    "question": "How long does sea freight take from Shanghai to Felixstowe?",
+    "expected": "answered",
+    "why": "The transit times section states an explicit port-to-port window of 32 to 35 days plus a door-to-door figure, which is exactly the timeframe a duration question requires.",
+    "passages": [
+      {
+        "heading": "Sea Freight from China to the UK | Harbourline Logistics",
+        "text": ""
+      },
+      {
+        "heading": "FCL and LCL from every major Chinese port",
+        "text": "We hold weekly allocation out of Shanghai, Ningbo, Yantian and Qingdao into Felixstowe, Southampton and London Gateway. Full container loads move on the direct Asia to North Europe loops; part loads are consolidated at our origin partners' CFS warehouses and shipped as LCL."
+      },
+      {
+        "heading": "Transit times",
+        "text": "Port to port from Shanghai to Felixstowe is 32 to 35 days on the direct services we book. Allow a further 5 to 7 days for LCL consignments, which must be consolidated at origin and deconsolidated at our Felixstowe CFS before release. Door to door, budget 42 days from cargo ready date to delivered on your Midlands loading bay."
+      },
+      {
+        "heading": "Peak season and blank sailings",
+        "text": "Between mid-August and Chinese New Year, carriers routinely blank sailings and rolled cargo becomes a real risk. We book two weeks further ahead during peak and will tell you honestly if your cargo ready date is too tight for the vessel you have been quoted."
+      },
+      {
+        "heading": "Customs clearance and delivery",
+        "text": "Our in-house clearance team lodges your import declaration while the vessel is still at sea, so containers move off the quay without demurrage. Deliveries are made on curtainsiders or flatbeds with tail-lift and moffett options for sites without a forklift."
+      }
+    ]
+  },
+  {
+    "domain": "payroll bureau",
+    "title": "Switching Your Payroll to Ashworth Payroll Bureau",
+    "question": "What is the process for moving our payroll over to you mid-year?",
+    "expected": "answered",
+    "why": "The page sets out an explicit, ordered five-step transfer sequence from discovery call through parallel run to handover, which is the ordered process a steps question demands.",
+    "passages": [
+      {
+        "heading": "Switching Your Payroll to Ashworth Payroll Bureau",
+        "text": ""
+      },
+      {
+        "heading": "Moving mid-year is easier than you think",
+        "text": "Most employers assume they are locked in until 6 April. In practice we take on payrolls in every month of the tax year, and as long as we have accurate year-to-date figures there is no disruption to your employees or to your RTI record."
+      },
+      {
+        "heading": "Our five-step transfer",
+        "text": "1. Discovery call. We agree your pay frequencies, payment dates, cut-off dates and who authorises each run. 2. Data collection. You send us your most recent FPS submission, employee year-to-date figures, starter and leaver paperwork and your pension scheme details. 3. Parallel run. We process one live period alongside your outgoing provider and reconcile gross to net to the penny before anything is filed. 4. Go live. We register as your PAYE agent with HMRC, take over RTI filing and issue your first payslips through the employee portal. 5. Handover. You receive your standing reporting pack and a named payroll administrator with a direct dial and email."
+      },
+      {
+        "heading": "What we need from you",
+        "text": "A signed 64-8 authorisation, your PAYE and Accounts Office references, and read access to your pension provider's employer portal. If staff are transferring under TUPE we will also need continuity of service dates."
+      },
+      {
+        "heading": "Cut-off dates",
+        "text": "We ask for variable data three working days before pay day for BACS runs and one working day before for Faster Payments. Anything received after cut-off is picked up in the following period or, if urgent, run as a supplementary payroll."
+      }
+    ]
+  },
+  {
+    "domain": "IT managed services",
+    "title": "Support Plans | Northgate IT Managed Services",
+    "question": "What is the difference between your Essential and Complete support plans?",
+    "expected": "answered",
+    "why": "Both tiers are described against the same attributes with contrasting specifics on hours, onsite cover and inclusions, giving the explicit contrast a comparison question requires.",
+    "passages": [
+      {
+        "heading": "Support Plans | Northgate IT Managed Services",
+        "text": ""
+      },
+      {
+        "heading": "Two ways to work with us",
+        "text": "Every client sits on either Essential or Complete. Both are billed per user per month on a rolling 12-month agreement, and both include our ticketing portal, asset register and monthly service report."
+      },
+      {
+        "heading": "Essential",
+        "text": "Essential is remote-first cover. Our service desk is available 8am to 6pm Monday to Friday with unlimited tickets, Windows and third-party patching, endpoint protection reporting and starter and leaver administration. Onsite attendance is available but chargeable at £85 per hour plus travel, and out-of-hours work is quoted case by case."
+      },
+      {
+        "heading": "Complete",
+        "text": "Complete extends cover to 24 hours a day, 365 days a year including weekends and bank holidays, and folds unlimited onsite visits into the monthly fee at no extra charge. It also adds backup monitoring with quarterly test restores, Microsoft 365 licence management, firewall and switch lifecycle management, and a quarterly technology review with your account director."
+      },
+      {
+        "heading": "Which plan suits us?",
+        "text": "Essential works well for offices of fewer than 20 users who work conventional hours and can tolerate a same-day rather than same-hour fix. Complete is for teams that cannot lose a working day, run shift or weekend operations, or carry contractual obligations to their own customers."
+      }
+    ]
+  },
+  {
+    "domain": "security guarding",
+    "title": "Retail Loss Prevention Officers | Sentinel Guarding Group",
+    "question": "Do you install and maintain CCTV camera systems?",
+    "expected": "none",
+    "why": "The page is entirely about deploying human loss prevention officers in stores and never mentions cameras, electronic security or installation work of any kind, so the topic is simply not covered.",
+    "passages": [
+      {
+        "heading": "Retail Loss Prevention Officers | Sentinel Guarding Group",
+        "text": ""
+      },
+      {
+        "heading": "Officers who understand retail",
+        "text": "We supply SIA-licensed loss prevention officers to department stores, supermarkets and high street chains across the North West. Our officers are recruited for judgement rather than presence, because the difference between a good detention and an expensive complaint is usually the decision made in the ten seconds beforehand."
+      },
+      {
+        "heading": "Plain clothes and uniformed deployment",
+        "text": "Store detectives work the shop floor in plain clothes, observing selection, concealment and approach to the exit before any intervention. Uniformed officers are deployed at entrances and tills where the aim is deterrence and reassurance rather than detection. Many clients run a blended team, with a uniformed officer front of house and a store detective circulating."
+      },
+      {
+        "heading": "Shrinkage reporting",
+        "text": "Every officer completes a daily activity log recording approaches, recoveries, refusals and any use of the store's banned persons list. Your area manager receives a weekly summary showing recovery value by department so that stock loss can be attributed to theft, damage or process failure rather than guessed at."
+      },
+      {
+        "heading": "Detentions and prosecutions",
+        "text": "Officers are trained in the retailer's own detention procedure and in the preparation of witness statements. Where a prosecution follows, the officer who made the detention attends court, and we do not charge for court attendance on contracts of more than 12 months' standing."
+      },
+      {
+        "heading": "Cover at short notice",
+        "text": "Seasonal uplift for Christmas trading, sale periods and store openings is booked through your account manager, with cover confirmed by return the same working day."
+      }
+    ]
+  },
+  {
+    "domain": "freight forwarding",
+    "title": "Bonded Warehousing, Felixstowe | Kestrel Freight Services",
+    "question": "What is a customs bonded warehouse?",
+    "expected": "lexical",
+    "why": "The term appears throughout and the benefits are sold hard, but the page never explains what bonded status actually means, so the definition the question asks for is missing.",
+    "passages": [
+      {
+        "heading": "Bonded Warehousing, Felixstowe | Kestrel Freight Services",
+        "text": ""
+      },
+      {
+        "heading": "HMRC-authorised storage two miles from the quay",
+        "text": "Our 60,000 sq ft bonded warehouse sits two miles from the port of Felixstowe, with 12 loading docks, racked and floor-stacked storage, and a dedicated container devanning bay. We hold the HMRC authorisation in our own name, so your goods can move from the terminal into bond the same day they are discharged."
+      },
+      {
+        "heading": "Why importers move into bond",
+        "text": "Cash flow is the reason most of our clients come to us. Nearly every importer we work with reaches a point in their second or third year where the working capital tied up in stock becomes the constraint on growth, and bonded storage is the lever that releases it. Clients tell us the difference shows up in their next set of management accounts."
+      },
+      {
+        "heading": "Re-export and onward distribution",
+        "text": "If a proportion of your stock is destined for Ireland, the EU or further afield, holding it in bond keeps your options open right up to the point of sale. We can pick, pack and re-export from the same facility, or release into UK circulation in whatever quantities your order book dictates."
+      },
+      {
+        "heading": "The paperwork is ours, not yours",
+        "text": "Bonded storage carries a compliance burden that puts a lot of importers off, and rightly so. Our team maintains the stock records HMRC expects, reconciles them monthly and handles every declaration in and out of the warehouse. You approve releases through our portal and we do the rest."
+      },
+      {
+        "heading": "Get set up",
+        "text": "Speak to our warehousing team and we will walk you through what your business needs in place before the first container arrives."
+      }
+    ]
+  },
+  {
+    "domain": "security guarding",
+    "title": "Manned Guarding and Static Site Security | Bastion Security Solutions",
+    "question": "How many SIA licensed officers do you employ?",
+    "expected": "lexical",
+    "why": "The page talks repeatedly about the size and depth of its officer pool and quotes other numbers such as its founding year and shift lengths, but never states a headcount.",
+    "passages": [
+      {
+        "heading": "Manned Guarding and Static Site Security | Bastion Security Solutions",
+        "text": ""
+      },
+      {
+        "heading": "Guarding across the East Midlands since 2004",
+        "text": "Bastion has provided static guarding, mobile patrols and gatehouse cover to construction, logistics and manufacturing clients since 2004. Every officer holds a current SIA front line licence and is screened to BS 7858 before their first deployment."
+      },
+      {
+        "heading": "Our officer pool",
+        "text": "The strength of our operation is the size and stability of our officer pool. Because we recruit continuously rather than only when we win work, we carry enough vetted and inducted officers to absorb sickness, holidays and short-notice uplift without resorting to agency cover. Turnover in our sector is notoriously high; ours is a fraction of the industry average, which is why clients on multi-year contracts tend to see the same faces on site year after year."
+      },
+      {
+        "heading": "Shift patterns and coverage",
+        "text": "Static posts are normally covered on 12-hour shifts with a two-officer relief pattern, giving continuous cover without breaching Working Time Regulations. Mobile patrol officers cover defined routes overnight with randomised timings and GPS-verified checkpoint scans."
+      },
+      {
+        "heading": "Control room and escalation",
+        "text": "Our control room is staffed around the clock and holds your site-specific assignment instructions, key registers and escalation contacts. Officers book on and off with the controller, and any missed book-on triggers an immediate welfare call and a supervisor dispatch."
+      },
+      {
+        "heading": "Mobilising a new site",
+        "text": "We have mobilised sites in under 24 hours where the incumbent has walked away, and we would always rather tell you at enquiry stage that a post is beyond our current capacity than staff it thinly and let you down."
+      }
+    ]
+  },
+  {
+    "domain": "IT managed services",
+    "title": "Backup and Disaster Recovery | Cobalt Technology Group",
+    "question": "Which backup platform do you use?",
+    "expected": "answered",
+    "why": "The page names the specific vendors and products it standardises on, which is the concrete named entity an entity question demands.",
+    "passages": [
+      {
+        "heading": "Backup and Disaster Recovery | Cobalt Technology Group",
+        "text": ""
+      },
+      {
+        "heading": "Backup is not a product, it is a tested outcome",
+        "text": "Plenty of the businesses that come to us already had backups running. What they did not have was evidence that a restore would work, or any idea how long their systems would be down while it happened. We design to a recovery time objective you have signed off, then prove it quarterly."
+      },
+      {
+        "heading": "The platforms we standardise on",
+        "text": "Onsite we deploy Datto SIRIS appliances, which take image-based snapshots hourly and replicate encrypted to Datto's UK cloud in Slough and Manchester. Microsoft 365 mailboxes, OneDrive, SharePoint and Teams data are protected separately with Datto SaaS Protection, because Microsoft's own retention is not a backup. Where a client already holds Veeam licensing for a VMware estate we will manage Veeam Backup and Replication instead rather than force a rip and replace."
+      },
+      {
+        "heading": "Testing and reporting",
+        "text": "Every protected server is virtualised from its most recent snapshot each quarter and screenshot-verified, and you receive the evidence pack with your quarterly service review. Failed backup jobs raise a ticket automatically overnight and are picked up before the service desk opens."
+      },
+      {
+        "heading": "When the worst happens",
+        "text": "A SIRIS appliance can boot your failed server locally within minutes, or spin the whole environment up in the Datto cloud if the site itself is unavailable after a flood or fire. Your disaster recovery runbook lives with your account manager and with our on-call engineers, not in a drawer at your office."
+      }
+    ]
+  },
+  {
+    "domain": "plumbing",
+    "title": "Water Heater Replacement & Installation in Round Rock, TX | Hill Country Plumbing Co.",
+    "question": "how much does it cost to replace a water heater",
+    "passages": [
+      {
+        "heading": "Water Heater Replacement & Installation in Round Rock, TX | Hill Country Plumbing Co.",
+        "text": ""
+      },
+      {
+        "heading": "Signs it's time to replace",
+        "text": "Rust-colored hot water, popping or rumbling from the tank, moisture pooling at the base, or a unit past 10 to 12 years old all point to a tank near the end of its life. Our licensed plumbers test the T&P valve, check the anode rod, and give you a straight answer on repair versus replacement."
+      },
+      {
+        "heading": "What a new water heater costs",
+        "text": "Most Round Rock homeowners pay between $1,450 and $2,900 for a standard 40- or 50-gallon gas tank water heater, installed. Tankless conversions run $3,800 to $6,500 depending on whether we need to upsize the gas line and add a new vent penetration. Every quote includes haul-away of the old unit, a new drain pan, the code-required expansion tank, and permit fees."
+      },
+      {
+        "heading": "Scheduling",
+        "text": "Call before 11 a.m. and we can usually have hot water back on that afternoon. We stock 40- and 50-gallon tanks on the trucks."
+      },
+      {
+        "heading": "Warranty",
+        "text": "Six-year manufacturer warranty on the tank plus a two-year Hill Country labor warranty on every installation."
+      }
+    ],
+    "expected": "answered",
+    "why": "A money question is met with actual installed-price ranges ($1,450-$2,900 tank, $3,800-$6,500 tankless) in a section plainly about the cost of the thing asked about."
+  },
+  {
+    "domain": "plumbing",
+    "title": "Trenchless Sewer Line Replacement | Vanguard Plumbing & Drain, Akron OH",
+    "question": "how long does trenchless sewer line replacement take",
+    "passages": [
+      {
+        "heading": "Trenchless Sewer Line Replacement | Vanguard Plumbing & Drain, Akron OH",
+        "text": ""
+      },
+      {
+        "heading": "What trenchless means",
+        "text": "Traditional sewer replacement means an open trench from the house to the city main. With pipe bursting and cured-in-place lining, we replace the same failing line through two small access points instead of tearing a channel across your property."
+      },
+      {
+        "heading": "Why homeowners choose it",
+        "text": "Your driveway, walkways, mature trees and landscaping stay where they are. There is no heavy excavator parked on the lawn and no sod to replace afterward."
+      },
+      {
+        "heading": "Our process",
+        "text": "We camera the existing line and locate it from the surface, open a small access pit at each end, pull a new seamless HDPE pipe through the old one while it fractures outward, then reconnect, re-camera the finished line, and backfill and tamp the access pits. Most of the work happens below grade, so your household routine is barely interrupted and we keep water service usable while we work."
+      },
+      {
+        "heading": "Financing and warranty",
+        "text": "Approved financing is available and the new pipe carries a 50-year material warranty."
+      }
+    ],
+    "expected": "lexical",
+    "why": "The page describes the trenchless job in detail and even gestures at disruption, but never commits to any timeframe for the work itself, a textbook depth gap on a duration question."
+  },
+  {
+    "domain": "electrical",
+    "title": "Level 2 EV Charger Installation | Beacon Electric, Portland OR",
+    "question": "what are the steps to get a level 2 ev charger installed at home",
+    "passages": [
+      {
+        "heading": "Level 2 EV Charger Installation | Beacon Electric, Portland OR",
+        "text": ""
+      },
+      {
+        "heading": "Why Level 2",
+        "text": "A standard 120-volt outlet adds only a few miles of range per hour. A Level 2 charger runs on a dedicated 240-volt circuit, typically 40 or 50 amps, and recharges most EVs overnight."
+      },
+      {
+        "heading": "Our installation process",
+        "text": "Step 1: we complete a load calculation on your existing service and confirm your panel has room for the new circuit. Step 2: we pull the electrical permit with the city on your behalf. Step 3: on install day we run the conductors from the panel to your parking spot in conduit and mount your hardwired charger or NEMA 14-50 receptacle. Step 4: we energize, test under load, and walk you through the app and charging schedule. Step 5: we meet the city inspector and file your utility rebate paperwork after the inspection passes."
+      },
+      {
+        "heading": "Panel upgrades",
+        "text": "If your service is already loaded, we will price a subpanel or a service upgrade as a separate line item so you can decide before we start."
+      }
+    ],
+    "expected": "answered",
+    "why": "A steps question is answered by an explicit ordered process (Step 1 through Step 5) covering the whole installation from assessment to inspection."
+  },
+  {
+    "domain": "hvac",
+    "title": "Furnace & Air Conditioner Installation | Comfort Zone Heating and Air, Boise ID",
+    "question": "which furnace brands do you install",
+    "passages": [
+      {
+        "heading": "Furnace & Air Conditioner Installation | Comfort Zone Heating and Air, Boise ID",
+        "text": ""
+      },
+      {
+        "heading": "Right-sized, not oversized",
+        "text": "Before we quote a system we run a Manual J load calculation on your home: square footage, window area, insulation and duct condition. An oversized furnace short-cycles, wears out early and leaves you with hot and cold rooms."
+      },
+      {
+        "heading": "The equipment we install",
+        "text": "We install only top-of-the-line, name-brand equipment from the industry's leading manufacturers, the same systems our own technicians put in their homes. As an authorized dealer with factory-trained installers, we can offer good, better and best options across single-stage, two-stage and fully modulating variable-speed models, and our comfort advisors will walk you through each one in your home."
+      },
+      {
+        "heading": "Financing and rebates",
+        "text": "Zero-percent financing for 18 months on approved credit, and we handle the Idaho Power rebate paperwork for qualifying high-efficiency systems."
+      },
+      {
+        "heading": "Our installation warranty",
+        "text": "Ten-year parts coverage plus a two-year Comfort Zone labor warranty on every replacement."
+      }
+    ],
+    "expected": "lexical",
+    "why": "The page is entirely about the equipment it installs and repeatedly alludes to brands and manufacturers, yet never names a single one, so the required entity is absent."
+  },
+  {
+    "domain": "roofing",
+    "title": "Metal Roofing vs. Asphalt Shingles: A Homeowner's Comparison | Summit Ridge Roofing",
+    "question": "which lasts longer a standing seam metal roof or asphalt shingles",
+    "passages": [
+      {
+        "heading": "Metal Roofing vs. Asphalt Shingles: A Homeowner's Comparison | Summit Ridge Roofing",
+        "text": ""
+      },
+      {
+        "heading": "Lifespan",
+        "text": "A standing seam metal roof installed over synthetic underlayment will last 40 to 70 years here. Architectural asphalt shingles are rated at 30 years by the manufacturer but realistically give 15 to 25 years along the Front Range, where hail is the limiting factor rather than sun or age."
+      },
+      {
+        "heading": "Up-front cost",
+        "text": "Standing seam runs $1,200 to $1,800 per roofing square installed. Architectural shingles run $450 to $650 per square. Metal costs roughly two to three times as much on day one."
+      },
+      {
+        "heading": "Hail and insurance",
+        "text": "Metal dents but rarely leaks after a hail event, so carriers often write cosmetic-damage exclusions on metal. Shingles bruise and lose granules, which is a covered loss on most policies."
+      },
+      {
+        "heading": "Which we recommend",
+        "text": "If you plan to stay in the home fifteen years or more, metal wins on cost per year of service. If you may sell within five, shingles are the better use of the money."
+      }
+    ],
+    "expected": "answered",
+    "why": "A comparison question gets both sides quantified against each other (40-70 years versus 15-25 years, plus cost per square), so the required contrast is actually committed to."
+  },
+  {
+    "domain": "roofing",
+    "title": "Roof Replacement Cost Guide | Northline Roofing & Exteriors, Grand Rapids MI",
+    "question": "what is a roofing square",
+    "passages": [
+      {
+        "heading": "Roof Replacement Cost Guide | Northline Roofing & Exteriors, Grand Rapids MI",
+        "text": ""
+      },
+      {
+        "heading": "How roofs are measured and priced",
+        "text": "Roofing is priced by the square, not by the square foot. One roofing square equals 100 square feet of roof surface, so a home with 2,000 square feet of roof area is a 20-square job before we add for waste, pitch and the extra cuts on hips and valleys."
+      },
+      {
+        "heading": "What drives your number",
+        "text": "Tear-off of a second existing layer, replacing soft or delaminated decking, steep pitch above 8:12, and the number of penetrations such as skylights and chimneys all move the price."
+      },
+      {
+        "heading": "Typical Grand Rapids project",
+        "text": "A straightforward 20-square ranch with one layer of tear-off and architectural shingles usually lands between $9,500 and $14,000 including underlayment, ice-and-water shield at the eaves, new pipe boots and ridge vent."
+      },
+      {
+        "heading": "Free measurement",
+        "text": "We measure by aerial report first and confirm on site before we hand you a fixed written price."
+      }
+    ],
+    "expected": "answered",
+    "why": "A definition question is answered outright with the defining equivalence, one square equals 100 square feet, plus a worked example."
+  },
+  {
+    "domain": "pest control",
+    "title": "Termite Control & Colony Elimination | Sentry Pest Solutions, Charleston SC",
+    "question": "how many treatments does the termite baiting program include",
+    "passages": [
+      {
+        "heading": "Termite Control & Colony Elimination | Sentry Pest Solutions, Charleston SC",
+        "text": ""
+      },
+      {
+        "heading": "Subterranean termites in the Lowcountry",
+        "text": "Eastern subterranean termites swarm here every spring. Mud tubes on foundation walls, blistered paint, hollow-sounding trim and discarded wings on windowsills are the signs homeowners bring us most often."
+      },
+      {
+        "heading": "How our baiting program works",
+        "text": "We install in-ground bait stations in the soil at regular intervals around the exterior of the structure. A technician inspects and services those stations on a recurring schedule, replenishing the bait matrix and re-treating wherever we find activity, and we continue until the colony is eliminated. Baiting is not a one-and-done product; it is an ongoing program and we stay with it until the activity stops."
+      },
+      {
+        "heading": "Inspection and the termite bond",
+        "text": "Every program starts with a full graph-out inspection of the crawl space, sill plate and exterior slab, and includes a renewable termite bond with damage coverage."
+      },
+      {
+        "heading": "Baiting or liquid?",
+        "text": "Where the soil can be trenched and rodded cleanly we may recommend a liquid termiticide barrier instead. Our inspector will tell you which approach fits your foundation."
+      }
+    ],
+    "expected": "lexical",
+    "why": "The baiting program is described thoroughly and even addresses servicing in qualitative terms, but the page never states a number of treatments or visits, so the count the question demands is missing."
+  },
+  {
+    "domain": "pest control",
+    "title": "Mosquito & Tick Yard Treatments | Green Shield Pest Control, Raleigh NC",
+    "question": "do you offer heat treatment for bed bugs",
+    "passages": [
+      {
+        "heading": "Mosquito & Tick Yard Treatments | Green Shield Pest Control, Raleigh NC",
+        "text": ""
+      },
+      {
+        "heading": "Our barrier spray",
+        "text": "Our technician mists the underside of shrub foliage, tree lines, fence rows, and the shaded areas under decks and play sets where adult mosquitoes rest during the heat of the day. The residual keeps working between visits."
+      },
+      {
+        "heading": "Service schedule",
+        "text": "Barrier applications are made every 21 days from April through October, seven applications in a full season, with free re-service between visits if the biting picks back up."
+      },
+      {
+        "heading": "Ticks and the yard",
+        "text": "We place tick tubes along wood lines and leaf litter edges in spring and again in late summer to break the deer-mouse stage of the blacklegged tick life cycle."
+      },
+      {
+        "heading": "Kids, pets and pollinators",
+        "text": "Products are applied per label, we avoid blooming plants to protect pollinators, and yards are ready for kids and pets once the application has dried."
+      }
+    ],
+    "expected": "none",
+    "why": "This is an outdoor mosquito and tick page; bed bugs and interior heat remediation are never mentioned anywhere on it, so the topic itself is uncovered rather than merely shallow."
+  },
+  {
+    "domain": "wedding catering",
+    "title": "Fern & Fig Catering Co. — Weddings",
+    "question": "how much does wedding catering cost per person",
+    "expected": "lexical",
+    "why": "The page is substantially about pricing — per-plate pricing, minimums, service charges — but never commits to a single figure, which is the textbook money depth gap.",
+    "passages": [
+      {
+        "heading": "Fern & Fig Catering Co. — Weddings",
+        "text": ""
+      },
+      {
+        "heading": "Our Approach",
+        "text": "Every wedding we cater begins with a conversation, not a package. We cook seasonally, we source from growers we know by name, and we build a menu around the two of you rather than pulling one off a shelf. Our chef has cooked more than four hundred weddings and still writes each menu from scratch."
+      },
+      {
+        "heading": "The Investment",
+        "text": "Because no two celebrations look alike, our per-plate pricing depends on your final menu, your guest count, the service style you choose, your bar package and the season you marry in. A plated four-course dinner in October is a different proposition from a summer family-style spread under a tent, so we price each wedding individually rather than publishing a rate card. Couples tell us the value shows up in the service as much as in the food."
+      },
+      {
+        "heading": "What Is Included",
+        "text": "Menu design, a private tasting for two, china, glassware, flatware and linen napkins, a captain and a fully uniformed service team, kitchen equipment, cake cutting and a spotless venue at the end of the night. Staffing and service charge are itemised line by line on your proposal so nothing arrives as a surprise."
+      },
+      {
+        "heading": "Request a Proposal",
+        "text": "Send us your date, your venue and an approximate guest count through the enquiry form and we will follow up with a tasting invitation and a detailed proposal built for your day. Most couples book us nine to twelve months out, and popular Saturdays in the autumn go earlier than that."
+      },
+      {
+        "heading": "Frequently Asked Questions",
+        "text": "Do you have a food and beverage minimum? Yes, and minimums vary by date and by venue, so we would rather talk them through with you on a call than quote a number that turns out not to apply. Can you work with our venue's kitchen? We have cooked at nearly every barn, hotel and garden in the county and we will do a site visit either way."
+      }
+    ]
+  },
+  {
+    "domain": "pet grooming",
+    "title": "Muddy Paws Grooming Salon — Bath House & Spa",
+    "question": "how long does a full groom take",
+    "expected": "lexical",
+    "why": "An entire section is devoted to how long the dog will be at the salon, yet the copy deliberately refuses to name any timeframe, so no synthesizer could state a duration from it.",
+    "passages": [
+      {
+        "heading": "Muddy Paws Grooming Salon — Bath House & Spa",
+        "text": ""
+      },
+      {
+        "heading": "What's Included in a Full Groom",
+        "text": "A full groom covers a warm hydro-bath with shampoo matched to your dog's coat, a thorough blow-out and brush-out, nails clipped and filed, ears cleaned, a sanitary trim, paw pads tidied, and a finish clip or hand-strip in whatever style you ask for. We finish with a bandana and a treat if their tummy allows it."
+      },
+      {
+        "heading": "How Long Will My Dog Be With Us?",
+        "text": "This is the question we get asked most, and the honest answer is that we take as long as your dog needs. A double-coated husky in the middle of a blow-out is a very different job from a smooth-coat terrier, and a nervous rescue on their first visit gets a break whenever they ask for one. We groom one dog at a time rather than running a kennel line, so nobody sits in a crate waiting their turn. Drop off in the morning, go and enjoy yourselves, and we will text you the moment your pup is towel-dry and ready to come home."
+      },
+      {
+        "heading": "Drop-off and Collection",
+        "text": "Appointments start from eight in the morning. If you need to collect at a particular point in the afternoon, tell us when you book and we will do our best to work backwards from it. Please do not feed a big breakfast before a groom."
+      },
+      {
+        "heading": "Nervous Dogs and Puppies",
+        "text": "First-timers get a short, gentle introduction visit before we go anywhere near them with clippers. Puppies come in for a puppy pamper — bath, dry, and a tidy of the face, feet and rear — so that the salon becomes a normal, boring place well before their first proper haircut."
+      }
+    ]
+  },
+  {
+    "domain": "car detailing",
+    "title": "Apex Auto Spa — Paint Protection",
+    "question": "wax or ceramic coating — which is better for a daily driver",
+    "expected": "lexical",
+    "why": "Both options are described at length on the same page but only in isolated marketing blurbs with no contrastive claim or comparable fact, so the comparison the question demands is never made.",
+    "passages": [
+      {
+        "heading": "Apex Auto Spa — Paint Protection",
+        "text": ""
+      },
+      {
+        "heading": "Hand Wax",
+        "text": "Our hand wax is a pure carnauba, applied by hand in two thin passes after a full decontamination wash. It leaves the deep, wet-looking glow that show cars are known for, it warms up the colour on darker paint, and it can be topped up any time the shine starts to soften."
+      },
+      {
+        "heading": "Ceramic Coating",
+        "text": "A professional-grade ceramic coating is a liquid polymer that cures into a hard, slick layer bonded to your clear coat. Water beads and rolls off, bug splatter and bird lime rinse away with far less effort, and the paint keeps a sharp gloss through the seasons. Installation always includes a machine polish first, because a coating locks in whatever is underneath it."
+      },
+      {
+        "heading": "Not Sure Which One You Want?",
+        "text": "Plenty of customers arrive asking which option they should choose and leave having booked something slightly different. Bring the car by, or send us photos of the paint in daylight, and our lead tech will look at the condition, ask how the car is stored and how it gets used, then recommend the protection that suits it. Either way you get an honest recommendation and a written quote before anything is touched."
+      },
+      {
+        "heading": "Maintenance",
+        "text": "Coated and waxed cars both do better with a proper maintenance wash than with a tunnel. We offer a monthly hand wash for customers who want the finish kept honest, with a light decontamination each quarter."
+      }
+    ]
+  },
+  {
+    "domain": "tutoring",
+    "title": "Northgate Learning — Getting Started",
+    "question": "how do I get started with tutoring",
+    "expected": "answered",
+    "why": "The page lays out an explicitly numbered, ordered onboarding sequence from consultation through weekly sessions, which is exactly the process shape a steps question demands.",
+    "passages": [
+      {
+        "heading": "Northgate Learning — Getting Started",
+        "text": ""
+      },
+      {
+        "heading": "How It Works",
+        "text": "1. Book a free consultation. We spend twenty minutes on the phone with a parent, and where it helps, ten with the student. 2. Diagnostic session. Your tutor works through a short written assessment in the first meeting to find the actual gap, which is rarely the chapter the teacher happens to be on. 3. Learning plan. We send a one-page plan naming the skills we are targeting, the order we will take them in, and how we will know it worked. 4. Weekly sessions begin. Same tutor, same slot each week, in your home or at our centre. 5. Progress review. We report back with work samples, then adjust the plan or step the frequency back down when a student is ready to run on their own."
+      },
+      {
+        "heading": "Subjects We Cover",
+        "text": "Primary literacy and numeracy, secondary maths through calculus, physics and chemistry, English essay writing, and exam preparation for entrance tests and finals."
+      },
+      {
+        "heading": "FAQ",
+        "text": "How soon can we get started? Most families have a first session inside a week of the consultation. Can we switch tutors? Yes — tell us it is not clicking and we will match you with someone else, no awkwardness required. Do you set homework? A little, and always something that fits in fifteen minutes."
+      }
+    ]
+  },
+  {
+    "domain": "driving school",
+    "title": "Keystone Driving School — Teen Programs",
+    "question": "how many lessons does the teen package include",
+    "expected": "answered",
+    "why": "The package section states an explicit lesson count and hour breakdown right beside the package name, so the number the question asks for is present and on-subject.",
+    "passages": [
+      {
+        "heading": "Keystone Driving School — Teen Programs",
+        "text": ""
+      },
+      {
+        "heading": "Teen Starter Package",
+        "text": "Our Teen Starter Package is the one most families choose: 6 hours of behind-the-wheel instruction with a licensed instructor, split into 4 lessons of 90 minutes each, plus the 30-hour state-approved classroom course delivered online at your own pace. Pick-up and drop-off at home or at school is included anywhere inside our service area."
+      },
+      {
+        "heading": "What Happens in Each Lesson",
+        "text": "Lesson one stays in quiet residential streets: mirror discipline, smooth braking, right turns. By lesson three we are out on multi-lane roads and practising the parking manoeuvres the examiner actually scores. The final lesson is a mock road test driven on the real route out of the DMV office."
+      },
+      {
+        "heading": "Road Test Day",
+        "text": "We hold road test appointments for our own students, and you may use one of our dual-control cars for the test, which most families do. Bring your permit, your certificate of completion, and your glasses if you wear them for driving."
+      },
+      {
+        "heading": "Pricing",
+        "text": "Teen Starter Package $549. Additional 90-minute lessons $95 each. Road test car use $120, which includes a 30-minute warm-up drive beforehand."
+      }
+    ]
+  },
+  {
+    "domain": "pet grooming",
+    "title": "Muddy Paws Grooming Salon — Services & Prices",
+    "question": "do you board dogs overnight",
+    "expected": "none",
+    "why": "This is a day-salon services and price list that never raises boarding or overnight stays at all, so the topic is absent rather than under-answered.",
+    "passages": [
+      {
+        "heading": "Muddy Paws Grooming Salon — Services & Prices",
+        "text": ""
+      },
+      {
+        "heading": "Bath & Brush",
+        "text": "Warm hydro-bath, coat-matched shampoo and conditioner, full blow-dry, brush-out, nails clipped and filed, ears cleaned, and a spritz of finishing mist. $45 for small breeds, $65 for large."
+      },
+      {
+        "heading": "Full Groom",
+        "text": "Everything in the bath and brush, plus a clip, scissor finish or hand-strip in the style you want, from $75. A de-shedding treatment for double coats is $20 on top."
+      },
+      {
+        "heading": "Puppy Pamper",
+        "text": "A gentle first experience for puppies: bath, dry, a tidy of the face, feet and rear, and plenty of praise. $35."
+      },
+      {
+        "heading": "Salon Hours",
+        "text": "Tuesday to Saturday, eight in the morning until five in the afternoon. Closed Sundays and Mondays."
+      },
+      {
+        "heading": "Booking",
+        "text": "We take appointments by phone or by text. A card on file holds your slot, and no-shows are charged half the service price."
+      }
+    ]
+  },
+  {
+    "domain": "driving school",
+    "title": "Clearway Driving School — Meet the Team",
+    "question": "who are your driving instructors",
+    "expected": "answered",
+    "why": "The page names specific instructors with credentials and dates, which is the concrete entity an entity question requires.",
+    "passages": [
+      {
+        "heading": "Clearway Driving School — Meet the Team",
+        "text": ""
+      },
+      {
+        "heading": "Marisol Vega, Owner and Lead Instructor",
+        "text": "Marisol has held a state driving instructor licence since 2009 and taught defensive driving for the county before she opened Clearway in 2016. She takes most of our nervous adult learners, and she is the one who answers the phone when you call."
+      },
+      {
+        "heading": "Dev Ramachandran, Senior Instructor",
+        "text": "Dev spent eleven years as a commercial driver before he retrained as an instructor. He is our manual-transmission specialist and he runs the highway lessons out of the north side."
+      },
+      {
+        "heading": "How We Vet Our Instructors",
+        "text": "Every instructor holds a current state instructor certification, clears a fingerprint background check through the DMV, keeps a clean personal driving record, and re-certifies in defensive driving each year. All of our cars are dual-control and inspected quarterly."
+      }
+    ]
+  },
+  {
+    "domain": "car detailing",
+    "title": "Apex Auto Spa — Paint Decontamination Explained",
+    "question": "what is a clay bar treatment",
+    "expected": "answered",
+    "why": "The page gives a plain definitional statement of what a clay bar is and what it removes, so the term is defined rather than merely mentioned.",
+    "passages": [
+      {
+        "heading": "Apex Auto Spa — Paint Decontamination Explained",
+        "text": ""
+      },
+      {
+        "heading": "What a Clay Bar Actually Does",
+        "text": "A clay bar is a pliable block of engineered resin that you glide across lubricated paint. Washing lifts what sits on top of the clear coat; claying shears off what has bonded into it — rail dust, industrial fallout, overspray, tree sap and brake particles. Run a hand over a car that has never been decontaminated and it feels like fine sandpaper. Clay the same panel and it feels like glass."
+      },
+      {
+        "heading": "When a Clay Treatment Is Needed",
+        "text": "Most cars want a clay treatment once or twice a year. If you are about to polish or install a coating, decontamination is not optional — anything left bonded to the paint gets sealed under the new layer or dragged across it by the pad."
+      },
+      {
+        "heading": "Chemical Decontamination First",
+        "text": "Before we clay, we spray an iron remover that dissolves embedded ferrous particles and bleeds purple as it works. Doing the chemical stage first means less mechanical work on the paint, and less mechanical work means fewer marks to polish out afterwards."
+      }
+    ]
+  }
+]

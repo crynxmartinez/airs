@@ -26,7 +26,9 @@ export interface AuditResult {
 export async function auditWebsite(url: string): Promise<AuditResult> {
   const startTime = Date.now();
 
-  const response = await fetch(url, {
+  const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+
+  const response = await fetch(normalizedUrl, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
@@ -41,14 +43,14 @@ export async function auditWebsite(url: string): Promise<AuditResult> {
   const html = await response.text();
   const loadTime = Date.now() - startTime;
   const $ = cheerio.load(html);
-  const pageUrl = url;
+  const pageUrl = normalizedUrl;
 
   const checks: AuditCheck[] = [];
 
   // --- TECHNICAL ---
 
   // HTTPS
-  const isHttps = url.startsWith("https://");
+  const isHttps = normalizedUrl.startsWith("https://");
   checks.push({
     category: "Technical",
     name: "HTTPS / SSL",
@@ -385,7 +387,7 @@ export async function auditWebsite(url: string): Promise<AuditResult> {
   });
 
   // Internal links
-  const internalLinks = $('a[href^="/"], a[href^="' + url + '"]').length;
+  const internalLinks = $('a[href^="/"], a[href^="' + pageUrl + '"]').length;
   checks.push({
     category: "UX",
     name: "Internal Links",
@@ -416,7 +418,7 @@ export async function auditWebsite(url: string): Promise<AuditResult> {
   });
 
   // External links
-  const externalLinks = $('a[href^="http"]').not(`a[href^="${url}"]`).length;
+  const externalLinks = $('a[href^="http"]').not(`a[href^="${pageUrl}"]`).length;
   checks.push({
     category: "Ecosystem",
     name: "External Links",

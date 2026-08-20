@@ -2,6 +2,8 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
+  target_location: string | null;
+  target_score: number | null;
   created_at: string;
 }
 
@@ -12,6 +14,8 @@ export interface Evaluation {
   search_intent: "informational" | "transactional" | "navigational";
   digital_asset_url: string;
   target_audience: string | null;
+  /** Market this evaluation targets. Drives the competitor-search region. */
+  target_location: string | null;
   scope: string | null;
   status: "draft" | "in_progress" | "completed";
   rrs_score: number | null;
@@ -28,7 +32,8 @@ export interface Competitor {
   competitor_name: string | null;
   title: string | null;
   description: string | null;
-  competitor_type: "direct" | "functional" | "platform" | "informational" | "ai_generated" | null;
+  /** "self" is your own digital asset, scored through the same pipeline but never counted as part of the competitive field. */
+  competitor_type: "self" | "direct" | "functional" | "platform" | "informational" | "ai_generated" | null;
   score: number | null;
   created_at: string;
 }
@@ -84,7 +89,7 @@ export interface Mission {
   id: string;
   evaluation_id: string;
   name: string;
-  status: "active" | "completed" | "archived";
+  status: "active" | "completed" | "inactive";
   created_at: string;
   completed_at: string | null;
 }

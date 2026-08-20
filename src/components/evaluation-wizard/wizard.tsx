@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, Trash2, Loader2, ChevronRight, ChevronLeft, Check, Globe, ScanLine, Sparkles, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,26 +19,25 @@ interface Competitor {
   jsRendered?: boolean;
 }
 
-interface Suggestion {
-  query: string;
-  type: string;
+interface QuestionSuggestion {
+  question: string;
+  source: string;
 }
 
 export function EvaluationWizard({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [targetLocation, setTargetLocation] = useState("");
 
   // Step 1 state
-  const [primaryQuery, setPrimaryQuery] = useState("");
-  const [searchIntent, setSearchIntent] = useState("transactional");
   const [digitalAssetUrl, setDigitalAssetUrl] = useState("");
-  const [targetAudience, setTargetAudience] = useState("");
-  const [scope, setScope] = useState("");
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+  const [manualQuestion, setManualQuestion] = useState("");
 
   // Suggestions state
   const [analyzing, setAnalyzing] = useState(false);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<QuestionSuggestion[]>([]);
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [pageInfo, setPageInfo] = useState<{ title: string; domain: string; businessName: string } | null>(null);
 
@@ -47,6 +46,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   const [manualUrl, setManualUrl] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchProgress, setSearchProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Step 3 state
   const [scrapingAll, setScrapingAll] = useState(false);
@@ -56,6 +56,15 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   const [evaluationId, setEvaluationId] = useState<string | null>(null);
 
   const steps = ["Define", "Competitors", "Evidence", "Review"];
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}`)
+      .then((r) => r.json())
+      .then((p) => {
+        if (p.target_location) setTargetLocation((current) => current || p.target_location);
+      })
+      .catch(() => {});
+  }, [projectId]);
 
   async function analyzeUrl() {
     if (!digitalAssetUrl) return;
@@ -73,51 +82,69 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
       if (data.error) {
         setSuggestError(data.error);
       } else {
-        setSuggestions(data.suggestions || []);
+        setSuggestions(data.questions || []);
         setPageInfo({
           title: data.pageTitle || "",
           domain: data.domain || "",
           businessName: data.businessName || "",
         });
-        // Auto-select first suggestion if no query set yet
-        if (!primaryQuery && data.suggestions?.length > 0) {
-          setPrimaryQuery(data.suggestions[0].query);
-        }
       }
     } catch {
-      setSuggestError("Could not analyze this URL. You can still type a query manually.");
+      setSuggestError("Could not analyze this URL. You can still type questions manually.");
     }
     setAnalyzing(false);
   }
 
+  function selectQuestion(question: string) {
+    setSelectedQuestion((prev) => (prev === question ? null : question));
+  }
+
+  function addManualQuestion() {
+    const q = manualQuestion.trim().toLowerCase();
+    if (!q) return;
+    setSelectedQuestion(q);
+    if (!suggestions.some((s) => s.question === q)) {
+      setSuggestions((prev) => [...prev, { question: q, source: "manual" }]);
+    }
+    setManualQuestion("");
+  }
+
   async function handleSearch() {
-    if (!primaryQuery) return;
+    if (!selectedQuestion) return;
     setSearching(true);
     setSearchError(null);
+    setSearchProgress({ done: 0, total: 1 });
+
     try {
-      const res = await fetch("/api/search", {
+      const res = await fetch(`/api/evaluations/${evaluationId}/discover`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: primaryQuery, excludeUrl: digitalAssetUrl }),
+        body: JSON.stringify({ query: selectedQuestion }),
       });
       const data = await res.json();
       if (data.error) {
         setSearchError(data.error);
-      } else if (data.results && data.results.length > 0) {
-        setCompetitors(
-          data.results.map((r: Competitor) => ({
-            ...r,
-            selected: true,
-            scraped: false,
-            scraping: false,
-          }))
-        );
       } else {
-        setSearchError("No competitors found. Try adding URLs manually below.");
+        const results = ((data.results ?? []) as Competitor[])
+          .filter((r) => r.competitor_type === "direct")
+          .map((r) => ({
+          ...r,
+          competitor_name: r.competitor_name || r.url,
+          selected: true,
+          scraped: false,
+          scraping: false,
+        }));
+        if (results.length > 0) {
+          setCompetitors(results);
+        } else {
+          setSearchError("No direct competitors found. Try adding URLs manually below.");
+        }
       }
     } catch {
-      setSearchError("Search failed. You can still add competitors manually below.");
+      setSearchError("Discovery failed. Try adding URLs manually below.");
     }
+    setSearchProgress({ done: 1, total: 1 });
+    setSearchProgress(null);
     setSearching(false);
   }
 
@@ -149,7 +176,9 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
   async function handleNext() {
     if (step === 0) {
-      // Create evaluation
+      // Create evaluation. `primary_query` stays as the seed for the audit path — the first
+      // selected question fills it — and the full set is saved as manual sub-intents, which
+      // the analysis ranks above autocomplete and the demand rebuild leaves alone.
       setSaving(true);
       try {
         const res = await fetch("/api/evaluations", {
@@ -157,15 +186,18 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             project_id: projectId,
-            primary_query: primaryQuery,
-            search_intent: searchIntent,
+            primary_query: selectedQuestion,
             digital_asset_url: digitalAssetUrl,
-            target_audience: targetAudience || undefined,
-            scope: scope || undefined,
+            target_location: targetLocation || undefined,
           }),
         });
         const data = await res.json();
         setEvaluationId(data.id);
+        await fetch(`/api/evaluations/${data.id}/questions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questions: [selectedQuestion] }),
+        });
         setStep(1);
       } catch {
         // ignore
@@ -253,7 +285,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   const selectedCompetitors = competitors.filter((c) => c.selected);
   const canProceed =
     step === 0
-      ? primaryQuery && digitalAssetUrl
+      ? !!selectedQuestion && !!digitalAssetUrl
       : step === 1
         ? selectedCompetitors.length > 0
         : step === 2
@@ -318,7 +350,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                 </Button>
               </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                Enter your URL and we&apos;ll suggest search queries based on your page content
+                Enter your URL and we&apos;ll suggest the questions people actually ask about your topic
               </p>
             </div>
 
@@ -337,120 +369,112 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
               </div>
             )}
 
-            {/* Suggestions */}
+            {/* Question suggestions */}
             {suggestions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
                   <Lightbulb className="h-4 w-4 text-amber-500" />
                   <label className="text-sm font-medium text-slate-700">
-                    Suggested Search Queries
+                    Suggested Questions
                   </label>
+                  <span className="text-xs text-slate-400">
+                    — pick one a buyer would ask
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPrimaryQuery(s.query)}
-                      className={cn(
-                        "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
-                        primaryQuery === s.query
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:bg-blue-50"
-                      )}
-                    >
-                      {s.query}
-                      <span className={cn(
-                        "ml-1.5 text-xs",
-                        primaryQuery === s.query ? "text-blue-200" : "text-slate-400"
-                      )}>
-                        {s.type}
-                      </span>
-                    </button>
-                  ))}
+                  {suggestions.map((s, i) => {
+                    const active = selectedQuestion === s.question;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => selectQuestion(s.question)}
+                        className={cn(
+                          "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
+                          active
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:bg-blue-50"
+                        )}
+                      >
+                        {s.question}
+                        {s.source === "manual" && (
+                          <span className={cn("ml-1.5 text-xs", active ? "text-blue-200" : "text-slate-400")}>
+                            yours
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Query input (always visible) */}
+            {/* Manual question input (always visible) */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Search Query
+                Add Your Own Question
               </label>
-              <input
-                type="text"
-                value={primaryQuery}
-                onChange={(e) => setPrimaryQuery(e.target.value)}
-                placeholder="e.g., emergency plumber chicago"
-                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualQuestion}
+                  onChange={(e) => setManualQuestion(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addManualQuestion()}
+                  placeholder="e.g., how much does an emergency plumber cost"
+                  className="flex-1 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <Button onClick={addManualQuestion} variant="secondary" disabled={!manualQuestion.trim()}>
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                Pick a suggestion above or type your own. This is what we&apos;ll use to find competitors.
+                {selectedQuestion
+                  ? "Question selected"
+                  : "Pick a suggestion above or type your own. This is what the AI will be asked."}
               </p>
             </div>
 
-            {/* Search Intent */}
+            {/* Target location */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Search Intent
+                Target Location <span className="text-slate-400">(market to search in)</span>
               </label>
-              <div className="flex gap-3">
-                {["transactional", "informational", "navigational"].map((intent) => (
-                  <button
-                    key={intent}
-                    onClick={() => setSearchIntent(intent)}
-                    className={cn(
-                      "rounded-lg border px-4 py-2 text-sm font-medium capitalize transition-colors",
-                      searchIntent === intent
-                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                        : "border-slate-300 text-slate-600 hover:bg-slate-50"
-                    )}
-                  >
-                    {intent}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Optional fields */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Target Audience <span className="text-slate-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value)}
-                  placeholder="e.g., homeowners in Chicago"
-                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Evaluation Scope <span className="text-slate-400">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={scope}
-                  onChange={(e) => setScope(e.target.value)}
-                  placeholder="e.g., Service page + homepage"
-                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
+              <input
+                type="text"
+                value={targetLocation}
+                onChange={(e) => setTargetLocation(e.target.value)}
+                placeholder="e.g., Australia"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Leave blank to infer from your site&apos;s domain. Without either, results are not
+                restricted to any country.
+              </p>
             </div>
           </div>
         )}
 
         {step === 1 && (
           <div className="space-y-5">
-            <div className="flex gap-2">
-              <Button onClick={handleSearch} disabled={searching || !primaryQuery} variant="secondary">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm text-slate-600">
+                  We search Google and AI in parallel — only competitors found in both are shown.
+                  Up to 10 matched results, filtered to real businesses only.
+                </p>
+                {searchProgress && (
+                  <p className="mt-1 text-xs font-medium text-blue-600">
+                    Searching...
+                  </p>
+                )}
+              </div>
+              <Button onClick={handleSearch} disabled={searching || !selectedQuestion} variant="secondary">
                 {searching ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Search className="h-4 w-4" />
                 )}
-                Search for Competitors
+                Find Competitors
               </Button>
             </div>
 
@@ -613,13 +637,11 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
             <h3 className="text-sm font-medium text-slate-800">Review & Launch</h3>
 
             <div className="space-y-2 rounded-lg bg-slate-50 p-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Query</span>
-                <span className="font-medium text-slate-800">{primaryQuery}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Intent</span>
-                <span className="font-medium capitalize text-slate-800">{searchIntent}</span>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-slate-500">Question</span>
+                <span className="font-medium text-slate-800">
+                  {selectedQuestion}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Your URL</span>

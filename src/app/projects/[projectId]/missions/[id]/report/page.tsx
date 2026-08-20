@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, Printer, ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { ReportShell } from "@/components/report-shell";
 import type { Mission, MissionTask } from "@/types";
 
 interface AuditCheck {
@@ -79,48 +78,21 @@ export default function MissionReportPage() {
   const warnChecks = auditChecks.filter((c) => c.status === "warn");
   const failedChecks = auditChecks.filter((c) => c.status === "fail");
 
-  const reportDate = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 
   return (
-    <div className="min-h-screen bg-slate-100 print:bg-white">
-      {/* Toolbar — hidden when printing */}
-      <div className="no-print sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-3 shadow-sm">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <Link href={`/projects/${projectId}/missions/${missionId}`}>
-            <Button variant="outline">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Mission
-            </Button>
-          </Link>
-          <Button onClick={() => window.print()}>
-            <Printer className="h-4 w-4" />
-            Print / Save as PDF
-          </Button>
-        </div>
-      </div>
-
-      {/* Report document */}
-      <div className="mx-auto max-w-4xl bg-white p-12 print:p-0 print:shadow-none shadow-sm print:max-w-none">
-        {/* Header */}
-        <div className="border-b-2 border-slate-800 pb-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">{mission.name}</h1>
-              <p className="mt-2 text-sm text-slate-500">
-                Website: {mission.site_url || "Not specified"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Report Date</p>
-              <p className="mt-1 text-sm text-slate-700">{reportDate}</p>
-            </div>
-          </div>
-        </div>
-
+    <ReportShell
+      kind="Mission Execution Plan"
+      subject={mission.name}
+      backHref={`/projects/${projectId}/missions/${missionId}`}
+      backLabel="Back to mission"
+      fileStem={`AIRS Mission — ${mission.name}`}
+      facts={[
+        { label: "Website", value: mission.site_url || "Not specified" },
+        { label: "Status", value: mission.status },
+        { label: "Progress", value: `${progress}% (${doneTasks} of ${totalTasks})` },
+        ...(audit ? [{ label: "Audit score", value: `${audit.total_score}/100` }] : []),
+      ]}
+    >
         {/* Executive Summary */}
         <section className="mt-8">
           <h2 className="text-lg font-bold text-slate-900">Executive Summary</h2>
@@ -131,19 +103,19 @@ export default function MissionReportPage() {
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-4">
-            <div className="rounded-lg border border-slate-200 p-4">
+            <div className="report-block rounded-lg border border-slate-200 p-4">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Overall Progress</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">{progress}%</p>
               <p className="mt-0.5 text-xs text-slate-500">{doneTasks} of {totalTasks} tasks completed</p>
             </div>
             {audit && (
-              <div className="rounded-lg border border-slate-200 p-4">
+              <div className="report-block rounded-lg border border-slate-200 p-4">
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Audit Score</p>
                 <p className="mt-1 text-2xl font-bold text-slate-900">{audit.total_score}/100</p>
                 <p className="mt-0.5 text-xs text-slate-500">{audit.summary.passed} passed, {audit.summary.warnings} warnings, {audit.summary.failed} failed</p>
               </div>
             )}
-            <div className="rounded-lg border border-slate-200 p-4">
+            <div className="report-block rounded-lg border border-slate-200 p-4">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Status</p>
               <p className="mt-1 text-2xl font-bold capitalize text-slate-900">{mission.status}</p>
               <p className="mt-0.5 text-xs text-slate-500">Created {new Date(mission.created_at).toLocaleDateString()}</p>
@@ -281,23 +253,6 @@ export default function MissionReportPage() {
           );
         })}
 
-        {/* Footer */}
-        <div className="mt-12 border-t border-slate-200 pt-4 text-center">
-          <p className="text-xs text-slate-400">
-            Generated by Airs CRM — {reportDate}
-          </p>
-        </div>
-      </div>
-
-      {/* Print styles */}
-      <style jsx global>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
-          @page { margin: 1in; }
-          section { break-inside: avoid; }
-        }
-      `}</style>
-    </div>
+    </ReportShell>
   );
 }

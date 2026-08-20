@@ -1,36 +1,46 @@
-import Database from "better-sqlite3";
+import { Pool } from "pg";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const DB_PATH = join(process.cwd(), "airs.db");
+/**
+ * Postgres access layer — same API as the old SQLite db.ts.
+ *
+ * Uses DATABASE_URL env var to connect (Prisma Postgres or any Postgres instance).
+ * Exposes query/queryOne/run/generateId — the same exports every route already uses.
+ */
 
-let db: Database.Database | null = null;
+let pool: Pool | null = null;
 
-export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-
-    const schemaPath = join(process.cwd(), "prisma", "schema.sql");
-    const schema = readFileSync(schemaPath, "utf-8");
-    db.exec(schema);
-
-    // Migrations for existing databases
-    const missionCols = db.pragma("table_info(missions)") as { name: string }[];
-    if (!missionCols.some((c) => c.name === "audit_data")) {
-      db.exec("ALTER TABLE missions ADD COLUMN audit_data TEXT");
+function getPool(): Pool {
+  if (!pool) {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error("DATABASE_URL is not set");
     }
-    const taskCols = db.pragma("table_info(mission_tasks)") as { name: string }[];
-    if (!taskCols.some((c) => c.name === "indicator_code")) {
-      db.exec("ALTER TABLE mission_tasks ADD COLUMN indicator_code TEXT");
-    }
-    const projectCols = db.pragma("table_info(projects)") as { name: string }[];
-    if (!projectCols.some((c) => c.name === "target_score")) {
-      db.exec("ALTER TABLE projects ADD COLUMN target_score INTEGER DEFAULT 80");
-    }
+    pool = new Pool({
+      connectionString,
+      ssl: connectionString.includes("sslmode=require")
+        ? { rejectUnauthorized: false }
+        : undefined,
+      max: 10,
+    });
   }
-  return db;
+  return pool;
+}
+
+let initialized = false;
+
+async function ensureSchema() {
+  if (initialized) return;
+  initialized = true;
+  const schemaPath = join(process.cwd(), "prisma", "schema-postgres.sql");
+  const schema = readFileSync(schemaPath, "utf-8");
+  const client = await getPool().connect();
+  try {
+    await client.query(schema);
+  } finally {
+    client.release();
+  }
 }
 
 export function generateId(): string {
@@ -39,14 +49,32 @@ export function generateId(): string {
   ).join("");
 }
 
-export function query<T = unknown>(sql: string, params: unknown[] = []): T[] {
-  return getDb().prepare(sql).all(...params) as T[];
+function bindable(value: unknown): unknown {
+  if (value === undefined) return null;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value !== null && typeof value === "object" && !(value instanceof Uint8Array)) {
+    return JSON.stringify(value);
+  }
+  return value;
 }
 
-export function queryOne<T = unknown>(sql: string, params: unknown[] = []): T | undefined {
-  return getDb().prepare(sql).get(...params) as T | undefined;
+export async function query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
+  await ensureSchema();
+  const result = await getPool().query(sql, params.map(bindable));
+  return result.rows as T[];
 }
 
-export function run(sql: string, params: unknown[] = []): { changes: number; lastInsertRowid: number | bigint } {
-  return getDb().prepare(sql).run(...params);
+export async function queryOne<T = unknown>(sql: string, params: unknown[] = []): Promise<T | undefined> {
+  await ensureSchema();
+  const result = await getPool().query(sql, params.map(bindable));
+  return (result.rows[0] as T | undefined) ?? undefined;
+}
+
+export async function run(sql: string, params: unknown[] = []): Promise<{ changes: number; lastInsertRowid: number | bigint }> {
+  await ensureSchema();
+  const result = await getPool().query(sql, params.map(bindable));
+  return {
+    changes: result.rowCount ?? 0,
+    lastInsertRowid: 0,
+  };
 }

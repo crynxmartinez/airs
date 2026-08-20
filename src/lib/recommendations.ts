@@ -1,5 +1,6 @@
 import { query, run, generateId } from "@/lib/db";
 import type { Finding, Recommendation, Evidence, Competitor } from "@/types";
+import type { AnswerType } from "@/lib/coverage";
 
 interface ActionPlanTemplate {
   indicator_code: string;
@@ -303,6 +304,25 @@ const ACTION_PLANS: ActionPlanTemplate[] = [
     impact: "+8-10 points on Trust & Authority",
   },
   {
+    indicator_code: "ST-01-I02",
+    title: "Use exactly one H1 per page",
+    generateDescription: (ev) => {
+      const counts = ev.map((e) => parseInt(e.value || "0", 10)).filter((n) => !isNaN(n));
+      const avg = counts.length > 0 ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length) : 0;
+      const offenders = counts.filter((n) => n !== 1).length;
+      return `${offenders} of ${ev.length} competitors don't use a single clear H1 (average ${avg} per page). One H1 stating the page's subject, with H2/H3 nested beneath it, tells both readers and AI systems what the page is about.`;
+    },
+    generateSteps: () => [
+      "Use exactly one <h1> per page, naming the page's primary subject",
+      "Demote decorative or logo headings from <h1> to a styled <div> or <p>",
+      "Nest section headings as <h2>, and sub-points as <h3> — never skip levels",
+      "Make each heading describe the content beneath it, not the brand",
+      "Check the outline renders logically with headings-only browser extensions",
+    ],
+    effort: "low",
+    impact: "+5-8 points on Intent Alignment",
+  },
+  {
     indicator_code: "TE-04-I01",
     title: "Add robots meta tag",
     generateDescription: (ev) => {
@@ -320,22 +340,128 @@ const ACTION_PLANS: ActionPlanTemplate[] = [
   },
 ];
 
-export function generateRecommendations(evaluationId: string): Recommendation[] {
-  run("DELETE FROM recommendations WHERE evaluation_id = ?", [evaluationId]);
+// --- AIRS weakness-based action plans ---
+// Keyed by the factor_code format AIRS-<answer_type> produced by generateWeaknessFindings.
+const WEAKNESS_PLANS: Record<string, { title: string; steps: string[]; effort: "low" | "medium" | "high"; impact: string }> = {
+  "AIRS-money": {
+    title: "Publish pricing content with concrete figures",
+    steps: [
+      "Create a dedicated pricing page with clear packages or tiers",
+      "State actual figures: ranges, starting prices, or per-unit rates in your currency",
+      "Use a heading like 'How much does [your service] cost' to match the question shape",
+      "Add FAQPage schema with the pricing Q&A pair",
+      "Ensure the price passage is self-contained — no 'as mentioned above' references",
+    ],
+    effort: "low",
+    impact: "Closes a money-type depth gap — AI assistants cannot quote you without a figure",
+  },
+  "AIRS-duration": {
+    title: "Publish timeline and turnaround information",
+    steps: [
+      "Add a 'How long does it take' section to your service pages",
+      "State concrete timeframes: '2-3 weeks', 'within 5 business days'",
+      "Break down phases if applicable (discovery, build, delivery)",
+      "Add a timeline table or list for extractability",
+      "Use FAQPage schema with the timeline Q&A pair",
+    ],
+    effort: "low",
+    impact: "Closes a duration-type depth gap — assistants hedge when no source states a timeframe",
+  },
+  "AIRS-count": {
+    title: "Publish quantity and capacity data",
+    steps: [
+      "Add specific numbers: team size, projects completed, clients served",
+      "Use a heading that matches the question shape (e.g. 'How many projects have we delivered')",
+      "Include the number in a self-contained sentence under the heading",
+      "Add Organization schema with employeeCount or numberOfEmployees",
+    ],
+    effort: "medium",
+    impact: "Closes a count-type gap — assistants cannot cite a number nobody publishes",
+  },
+  "AIRS-steps": {
+    title: "Publish a step-by-step process guide",
+    steps: [
+      "Document your process as an ordered list (Step 1, Step 2, Step 3)",
+      "Use heading like 'How to [process name]' or 'Our [service] process'",
+      "Make each step a self-contained sentence with a clear action",
+      "Add HowTo schema markup for machine readability",
+      "Link to the process guide from your service pages",
+    ],
+    effort: "medium",
+    impact: "Closes a steps-type gap — assistants prefer citing structured process content",
+  },
+  "AIRS-comparison": {
+    title: "Publish a comparison guide for your service category",
+    steps: [
+      "Research the main alternatives your buyers consider",
+      "Create a comparison table: your approach vs alternatives, with criteria",
+      "Use explicit comparison language: 'versus', 'compared to', 'whereas'",
+      "Be honest about tradeoffs — credibility beats one-sided marketing",
+      "Add a heading like '[Your service] vs [alternative]: which is right for you'",
+    ],
+    effort: "high",
+    impact: "Closes a comparison-type gap — high effort but high demand, and first-mover advantage is strong",
+  },
+  "AIRS-entity": {
+    title: "Publish named provider/team information",
+    steps: [
+      "Add a team page with named members, roles, and credentials",
+      "Use headings like 'Who we are' or 'Our team'",
+      "Include specific names, titles, and qualifications",
+      "Add Person schema markup for each team member",
+      "Link to the team page from your homepage and about page",
+    ],
+    effort: "low",
+    impact: "Closes an entity-type gap — assistants need named entities to answer 'who' questions",
+  },
+  "AIRS-boolean": {
+    title: "Publish direct yes/no answers to common questions",
+    steps: [
+      "Identify the boolean questions your buyers ask (do I need X, is Y required)",
+      "Write a FAQ section with direct answers: 'Yes — you need...' or 'No, it isn't required'",
+      "Make the answer the first sentence, then elaborate",
+      "Add FAQPage schema with each Q&A pair",
+      "Link to the FAQ from your service pages",
+    ],
+    effort: "low",
+    impact: "Closes a boolean-type gap — assistants cite direct polarity answers over hedged prose",
+  },
+  "AIRS-definition": {
+    title: "Publish clear definitions for key terms",
+    steps: [
+      "Identify terms in your industry that buyers search for definitions of",
+      "Write a glossary or 'What is [term]' page with a clear definition first",
+      "Use the pattern: '[Term] is a [category] that [purpose]'",
+      "Add DefinedTerm schema markup if applicable",
+      "Link to definitions from your service pages where terms appear",
+    ],
+    effort: "low",
+    impact: "Closes a definition-type gap — low effort, but lower winnability since anyone can define a term",
+  },
+};
 
-  const findings = query<Finding>(
-    "SELECT * FROM findings WHERE evaluation_id = ? AND type = 'opportunity' ORDER BY impact_level DESC",
+export async function generateRecommendations(evaluationId: string): Promise<Recommendation[]> {
+  await run("DELETE FROM recommendations WHERE evaluation_id = ?", [evaluationId]);
+
+  // Opportunities (a gap most of the field shares) rank above parity work.
+  // impact_level is ordered explicitly: sorting the raw string put 'low' first.
+  const findings = await query<Finding>(
+    `SELECT * FROM findings
+     WHERE evaluation_id = ? AND type IN ('opportunity', 'gap')
+     ORDER BY
+       CASE type WHEN 'opportunity' THEN 0 ELSE 1 END,
+       CASE impact_level WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`,
     [evaluationId]
   );
 
   if (findings.length === 0) return [];
 
-  const competitors = query<Competitor>(
+  const competitors = await query<Competitor>(
     "SELECT * FROM competitors WHERE evaluation_id = ?",
     [evaluationId]
   );
 
-  const evidence = query<Evidence>(
+  const evidence = await query<Evidence>(
     "SELECT * FROM evidence WHERE evaluation_id = ?",
     [evaluationId]
   );
@@ -350,6 +476,7 @@ export function generateRecommendations(evaluationId: string): Recommendation[] 
   for (const finding of findings) {
     const indicatorCode = finding.factor_code || "";
     const plan = planByCode[indicatorCode];
+    const weaknessPlan = WEAKNESS_PLANS[indicatorCode];
 
     const recId = generateId();
     const priority = finding.impact_level || "medium";
@@ -366,15 +493,21 @@ export function generateRecommendations(evaluationId: string): Recommendation[] 
       if (steps.length > 0) {
         description += "\n\nAction steps:\n" + steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
       }
+    } else if (weaknessPlan) {
+      title = weaknessPlan.title;
+      description = finding.description;
+      if (weaknessPlan.steps.length > 0) {
+        description += "\n\nAction steps:\n" + weaknessPlan.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
+      }
     } else {
       title = extractTitle(finding.description);
       description = finding.description;
     }
 
-    const effort = plan?.effort || determineEffort(finding.dimension_code || "");
-    const impact = plan?.impact || determineImpact(finding.dimension_code || "");
+    const effort = plan?.effort || weaknessPlan?.effort || determineEffort(finding.dimension_code || "");
+    const impact = plan?.impact || weaknessPlan?.impact || determineImpact(finding.dimension_code || "");
 
-    run(
+    await run(
       `INSERT INTO recommendations (id, evaluation_id, title, description, priority, effort, expected_impact, finding_ids)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [recId, evaluationId, title, description, priority, effort, impact, finding.id]

@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const project = queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
+  const project = await queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
@@ -21,17 +21,17 @@ export async function PUT(
   const { id } = await params;
   const body = await req.json();
 
-  const existing = queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
+  const existing = await queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
   if (!existing) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  run(
-    "UPDATE projects SET name = COALESCE(?, name), description = COALESCE(?, description) WHERE id = ?",
-    [body.name ?? null, body.description ?? null, id]
+  await run(
+    "UPDATE projects SET name = COALESCE(?, name), description = COALESCE(?, description), target_location = COALESCE(?, target_location) WHERE id = ?",
+    [body.name ?? null, body.description ?? null, body.target_location ?? null, id]
   );
 
-  const updated = queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
+  const updated = await queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
   return NextResponse.json(updated);
 }
 
@@ -40,6 +40,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  run("DELETE FROM projects WHERE id = ?", [id]);
+  await run("DELETE FROM projects WHERE id = ?", [id]);
   return NextResponse.json({ success: true });
 }

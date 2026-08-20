@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryOne, run } from "@/lib/db";
+import { queryOne, query, run } from "@/lib/db";
 import * as cheerio from "cheerio";
+import { SIGNALS, countLinks } from "@/lib/indicators";
 import type { Mission, Evaluation } from "@/types";
 
 export async function POST(
@@ -9,19 +10,19 @@ export async function POST(
 ) {
   const { id: missionId, taskId } = await params;
 
-  const mission = queryOne<Mission & { audit_data: string | null }>(
+  const mission = await queryOne<Mission & { audit_data: string | null }>(
     "SELECT * FROM missions WHERE id = ?", [missionId]
   );
   if (!mission) return NextResponse.json({ error: "Mission not found" }, { status: 404 });
 
-  const evaluation = queryOne<Evaluation>(
+  const evaluation = await queryOne<Evaluation>(
     "SELECT * FROM evaluations WHERE id = ?", [mission.evaluation_id]
   );
   if (!evaluation || !evaluation.digital_asset_url) {
     return NextResponse.json({ error: "No website URL set for this project" }, { status: 400 });
   }
 
-  const task = queryOne<{ id: string; indicator_code: string | null; title: string }>(
+  const task = await queryOne<{ id: string; indicator_code: string | null; title: string }>(
     "SELECT id, indicator_code, title FROM mission_tasks WHERE id = ? AND mission_id = ?",
     [taskId, missionId]
   );
@@ -48,6 +49,7 @@ export async function POST(
     const $ = cheerio.load(html);
     const bodyText = $("body").text().replace(/\s+/g, " ").trim();
     const url = evaluation.digital_asset_url;
+    const signalInput = { $, html, bodyText };
 
     let passed = false;
     let currentValue = "";
@@ -76,14 +78,14 @@ export async function POST(
         break;
       }
       case "faq": {
-        const hasFaq = /faq|frequently asked/i.test(bodyText) || $("section").filter((_, el) => /faq/i.test($(el).text())).length > 0;
+        const hasFaq = SIGNALS.faq(signalInput);
         passed = hasFaq;
         currentValue = hasFaq ? "Found" : "Not found";
         detail = passed ? "FAQ section detected." : "No FAQ section found.";
         break;
       }
       case "pricing": {
-        const hasPricing = /price|pricing|\$\d|cost|quote|estimate/i.test(bodyText);
+        const hasPricing = SIGNALS.pricing(signalInput);
         passed = hasPricing;
         currentValue = hasPricing ? "Found" : "Not found";
         detail = passed ? "Pricing information detected." : "No pricing information found.";
@@ -97,14 +99,14 @@ export async function POST(
         break;
       }
       case "license": {
-        const has = /license|licensed|certified|certification/i.test(bodyText);
+        const has = SIGNALS.license(signalInput);
         passed = has;
         currentValue = has ? "Found" : "Not found";
         detail = passed ? "License or certification mentioned." : "No license or certification found.";
         break;
       }
       case "author": {
-        const has = /author|byline|written by/i.test(bodyText);
+        const has = SIGNALS.author(signalInput);
         passed = has;
         currentValue = has ? "Found" : "Not found";
         detail = passed ? "Author bio or reference detected." : "No author bios found.";
@@ -202,28 +204,28 @@ export async function POST(
         break;
       }
       case "contact": {
-        const has = /contact|email|phone|call|address/i.test(bodyText);
+        const has = SIGNALS.contact(signalInput);
         passed = has;
         currentValue = has ? "Found" : "Not found";
         detail = passed ? "Contact information found." : "No contact information found.";
         break;
       }
       case "reviews": {
-        const has = /review|testimonial|rating|star/i.test(bodyText);
+        const has = SIGNALS.reviews(signalInput);
         passed = has;
         currentValue = has ? "Found" : "Not found";
         detail = passed ? "Reviews or testimonials detected." : "No reviews or testimonials found.";
         break;
       }
       case "internal_links": {
-        const count = $('a[href^="/"], a[href^="' + url + '"]').length;
+        const count = countLinks($, url).internal;
         passed = count >= 3;
         currentValue = `${count} links`;
         detail = passed ? `${count} internal links found.` : `Only ${count} internal links — add more for navigation.`;
         break;
       }
       case "external_links": {
-        const count = $('a[href^="http"]').not(`a[href^="${url}"]`).length;
+        const count = countLinks($, url).external;
         passed = count > 0;
         currentValue = `${count} links`;
         detail = passed ? `${count} external links found.` : "No external links found — link to authoritative sources.";
@@ -235,10 +237,18 @@ export async function POST(
 
     // If passed, auto-mark task as done
     if (passed) {
-      run(
-        "UPDATE mission_tasks SET status = 'done', completed_at = datetime('now') WHERE id = ?",
+      await run(
+        "UPDATE mission_tasks SET status = 'done', completed_at = to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = ?",
         [taskId]
       );
+      // Auto-complete the mission when every task is done.
+      const remaining = await queryOne<{ count: number }>(
+        "SELECT COUNT(*) as count FROM mission_tasks WHERE mission_id = ? AND status != 'done'",
+        [missionId]
+      );
+      if (remaining && remaining.count === 0) {
+        await run("UPDATE missions SET status = 'completed', completed_at = to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = ? AND status != 'completed'", [missionId]);
+      }
     }
 
     return NextResponse.json({

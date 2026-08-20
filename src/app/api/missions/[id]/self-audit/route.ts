@@ -55,14 +55,14 @@ export async function POST(
       "Self-audit: Compare your site to competitors",
     ];
     for (const title of genericTitles) {
-      run(
+      await run(
         "DELETE FROM mission_tasks WHERE mission_id = ? AND phase = 'phase1' AND title = ? AND status = 'todo'",
         [missionId, title]
       );
     }
 
     // Re-fetch after deletion
-    const remainingTasks = query<MissionTask>(
+    const remainingTasks = await query<MissionTask>(
       "SELECT * FROM mission_tasks WHERE mission_id = ? AND phase = 'phase1'",
       [missionId]
     );
@@ -82,7 +82,7 @@ export async function POST(
       const description = `${check.detail}\n\nCurrent value: ${check.value}\n\nHow to fix: ${check.recommendation || "Review and address this issue."}`;
 
       const taskId = generateId();
-      run(
+      await run(
         "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, 'phase1', ?, 'todo')",
         [taskId, missionId, taskTitle, description, indicatorCode]
       );
@@ -103,7 +103,7 @@ export async function POST(
     }
 
     // Save audit result to mission for persistence across refreshes
-    run(
+    await run(
       "UPDATE missions SET audit_data = ? WHERE id = ?",
       [JSON.stringify(result), missionId]
     );

@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { calculateGeoScore } from "@/lib/geo";
 import { calculateGmbScore } from "@/lib/gmb";
 import { fetchRobotsTxt, parseRobotsForAiCrawlers } from "@/lib/geo";
+import { computeCitationShare } from "@/lib/ai-capture";
 import type { Evaluation, Mission, Project } from "@/types";
 
 interface ScoreHistoryRow {
@@ -36,12 +37,12 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
 
-  const project = queryOne<Project>("SELECT * FROM projects WHERE id = ?", [projectId]);
+  const project = await queryOne<Project>("SELECT * FROM projects WHERE id = ?", [projectId]);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const evaluations = query<Evaluation & { competitor_count: number; evidence_count: number }>(
+  const evaluations = await query<Evaluation & { competitor_count: number; evidence_count: number }>(
     `SELECT e.*, 
        (SELECT COUNT(*) FROM competitors WHERE evaluation_id = e.id) as competitor_count,
        (SELECT COUNT(*) FROM evidence WHERE evaluation_id = e.id) as evidence_count
@@ -66,7 +67,7 @@ export async function GET(
         const robotsTxt = await fetchRobotsTxt(siteUrl);
         robotsData = parseRobotsForAiCrawlers(robotsTxt);
       }
-      const result = calculateGeoScore(evaluations[0].id, robotsData);
+      const result = await calculateGeoScore(evaluations[0].id, robotsData);
       geoScore = result.score;
       geoData = { score: result.score, rating: result.rating, summary: result.summary };
     } catch {
@@ -79,7 +80,7 @@ export async function GET(
   let gmbData: { score: number; rating: string; summary: { passed: number; warnings: number; failed: number } } | null = null;
   if (evaluations.length > 0) {
     try {
-      const result = calculateGmbScore(evaluations[0].id);
+      const result = await calculateGmbScore(evaluations[0].id);
       gmbScore = result.score;
       gmbData = { score: result.score, rating: result.rating, summary: result.summary };
     } catch {
@@ -88,7 +89,7 @@ export async function GET(
   }
 
   // GMB audit LPS score
-  const gmbAudits = query<GmbAuditRow>(
+  const gmbAudits = await query<GmbAuditRow>(
     "SELECT id, lps_score, rating, your_rank, search_query, created_at FROM gmb_audits WHERE project_id = ? ORDER BY created_at DESC",
     [projectId]
   );
@@ -107,7 +108,7 @@ export async function GET(
     : null;
 
   // Missions
-  const missions = query<Mission & { task_count: number; done_count: number }>(
+  const missions = await query<Mission & { task_count: number; done_count: number }>(
     `SELECT m.*, 
        (SELECT COUNT(*) FROM mission_tasks WHERE mission_id = m.id) as task_count,
        (SELECT COUNT(*) FROM mission_tasks WHERE mission_id = m.id AND status = 'done') as done_count
@@ -123,7 +124,7 @@ export async function GET(
   const activeMissions = missions.filter((m) => m.status === "active");
 
   // Score history
-  const scoreHistory = query<ScoreHistoryRow>(
+  const scoreHistory = await query<ScoreHistoryRow>(
     `SELECT sh.id, sh.evaluation_id, sh.rrs_score, sh.rating, sh.recorded_at
      FROM score_history sh
      JOIN evaluations e ON sh.evaluation_id = e.id
@@ -175,7 +176,7 @@ export async function GET(
   }
 
   // Recent completed tasks
-  const recentTasks = query<{ title: string; completed_at: string; mission_name: string }>(
+  const recentTasks = await query<{ title: string; completed_at: string; mission_name: string }>(
     `SELECT mt.title, mt.completed_at, m.name as mission_name
      FROM mission_tasks mt JOIN missions m ON mt.mission_id = m.id
      JOIN evaluations e ON m.evaluation_id = e.id
@@ -199,6 +200,9 @@ export async function GET(
   // Competitor count
   const competitorCount = evaluations.reduce((sum, e) => sum + (e.competitor_count || 0), 0);
 
+  // Citation Share — the headline AI visibility metric
+  const citationShare = await computeCitationShare(projectId);
+
   return NextResponse.json({
     project,
     scores: {
@@ -211,6 +215,7 @@ export async function GET(
       composite: compositeScore,
       target: (project as Project & { target_score?: number }).target_score || 80,
     },
+    citationShare,
     stats: {
       evaluationCount: evaluations.length,
       competitorCount,
@@ -236,6 +241,7 @@ export async function GET(
   });
 }
 
-function queryOne<T = unknown>(sql: string, params: unknown[] = []): T | undefined {
-  return query<T>(sql, params)[0];
+async function queryOne<T = unknown>(sql: string, params: unknown[] = []): Promise<T | undefined> {
+  const rows = await query<T>(sql, params);
+  return rows[0];
 }

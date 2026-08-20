@@ -49,9 +49,9 @@ export function Sidebar() {
 
   // Analysis child items — grouped as one workflow
   const analysisItems = [
-    { label: "Evaluations", href: `/projects/${activeProjectId}/evaluations`, icon: ClipboardList },
-    { label: "Missions", href: `/projects/${activeProjectId}/missions`, icon: Target },
-    { label: "Benchmarks", href: `/projects/${activeProjectId}/benchmarks`, icon: TrendingUp },
+    { label: "Evaluations", href: `/projects/${activeProjectId}/evaluations`, icon: ClipboardList, exact: true },
+    { label: "Missions", href: `/projects/${activeProjectId}/missions`, icon: Target, exact: false },
+    { label: "Benchmarks", href: `/projects/${activeProjectId}/benchmarks`, icon: TrendingUp, exact: false },
   ];
 
   function isActive(href: string) {
@@ -64,9 +64,9 @@ export function Sidebar() {
 
   // GMB Analysis child items
   const gmbItems = [
-    { label: "Maps Audit", href: `/projects/${activeProjectId}/gmb`, icon: MapPin },
-    { label: "Action Plans", href: `/projects/${activeProjectId}/gmb/action-plans`, icon: ClipboardList },
-    { label: "Rank Tracking", href: `/projects/${activeProjectId}/gmb/rank-tracking`, icon: TrendingUp },
+    { label: "Maps Audit", href: `/projects/${activeProjectId}/gmb`, icon: MapPin, exact: true },
+    { label: "Action Plans", href: `/projects/${activeProjectId}/gmb/action-plans`, icon: ClipboardList, exact: false },
+    { label: "Rank Tracking", href: `/projects/${activeProjectId}/gmb/rank-tracking`, icon: TrendingUp, exact: false },
   ];
 
   // Auto-expand Analysis if any child is active, plus allow manual toggle
@@ -90,7 +90,7 @@ export function Sidebar() {
 
       {/* No project selected — general view */}
       {isGeneralView && (
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
           <Link
             href="/dashboard"
             className={cn(
@@ -138,7 +138,7 @@ export function Sidebar() {
 
       {/* Project selected — project-scoped view */}
       {!isGeneralView && (
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
           {/* Back to all projects */}
           <Link
             href="/dashboard"
@@ -211,7 +211,7 @@ export function Sidebar() {
               <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
                 {analysisItems.map((item) => {
                   const Icon = item.icon;
-                  const active = isActive(item.href);
+                  const active = item.exact ? isExactActive(item.href) : isActive(item.href);
                   return (
                     <Link
                       key={item.href}
@@ -255,7 +255,7 @@ export function Sidebar() {
               <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
                 {gmbItems.map((item) => {
                   const Icon = item.icon;
-                  const active = isActive(item.href);
+                  const active = item.exact ? isExactActive(item.href) : isActive(item.href);
                   return (
                     <Link
                       key={item.href}
@@ -290,26 +290,6 @@ export function Sidebar() {
             Reports
           </Link>
 
-          {/* Other projects */}
-          {otherProjects.length > 0 && (
-            <div className="pt-3">
-              <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Other Projects
-              </p>
-              <div className="space-y-1">
-                {otherProjects.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/projects/${p.id}`}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
-                  >
-                    <Folder className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span className="truncate">{p.name}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
         </nav>
       )}
 

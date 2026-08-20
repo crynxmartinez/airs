@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ClipboardList, Plus, Trash2, RefreshCw } from "lucide-react";
+import { ClipboardList, Plus, Trash2, Loader2 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -38,6 +38,14 @@ export default function ProjectEvaluationsPage() {
     setDeleteTarget(null);
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -47,21 +55,12 @@ export default function ProjectEvaluationsPage() {
             Manage competitor analysis evaluations for this project
           </p>
         </div>
-        {evaluations.length === 0 ? (
-          <Link href={`/projects/${projectId}/evaluations/new`}>
-            <Button>
-              <Plus className="h-4 w-4" />
-              New Evaluation
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`/projects/${projectId}/evaluations/${evaluations[0].id}`}>
-            <Button>
-              <RefreshCw className="h-4 w-4" />
-              Re-score Evaluation
-            </Button>
-          </Link>
-        )}
+        <Link href={`/projects/${projectId}/evaluations/new`}>
+          <Button>
+            <Plus className="h-4 w-4" />
+            New Evaluation
+          </Button>
+        </Link>
       </div>
 
       {evaluations.length > 0 ? (
@@ -69,8 +68,8 @@ export default function ProjectEvaluationsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-500">
-                <th className="px-5 py-2.5">Query</th>
-                <th className="px-5 py-2.5">Intent</th>
+                <th className="px-5 py-2.5">URL</th>
+                <th className="px-5 py-2.5">Question</th>
                 <th className="px-5 py-2.5">Status</th>
                 <th className="px-5 py-2.5">Competitors</th>
                 <th className="px-5 py-2.5">Evidence</th>
@@ -85,12 +84,19 @@ export default function ProjectEvaluationsPage() {
                   <td className="px-5 py-3">
                     <Link
                       href={`/projects/${projectId}/evaluations/${ev.id}`}
+                      className="text-slate-600 hover:text-blue-600 truncate max-w-[200px] inline-block"
+                    >
+                      {ev.digital_asset_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3">
+                    <Link
+                      href={`/projects/${projectId}/evaluations/${ev.id}`}
                       className="font-medium text-slate-800 hover:text-blue-600"
                     >
                       {ev.primary_query}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 capitalize text-slate-600">{ev.search_intent}</td>
                   <td className="px-5 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       ev.status === "completed" ? "bg-green-100 text-green-700" :

@@ -29,7 +29,7 @@ interface ActivityItem {
 }
 
 export async function GET() {
-  const projects = query<ProjectWithCounts>(
+  const projects = await query<ProjectWithCounts>(
     `SELECT p.*, 
        (SELECT COUNT(*) FROM evaluations WHERE project_id = p.id) as evaluation_count,
        (SELECT COUNT(*) FROM competitors c JOIN evaluations e ON c.evaluation_id = e.id WHERE e.project_id = p.id) as competitor_count,
@@ -53,7 +53,7 @@ export async function GET() {
 
   for (const project of projects) {
     // Get latest evaluation with RRS score
-    const evals = query<Evaluation>(
+    const evals = await query<Evaluation>(
       "SELECT * FROM evaluations WHERE project_id = ? ORDER BY created_at DESC",
       [project.id]
     );
@@ -67,7 +67,7 @@ export async function GET() {
     let geoScore: number | null = null;
     if (evals.length > 0) {
       try {
-        const geoResult = calculateGeoScore(evals[0].id);
+        const geoResult = await calculateGeoScore(evals[0].id);
         geoScore = geoResult.score;
       } catch {
         // no evidence yet
@@ -78,7 +78,7 @@ export async function GET() {
     let gmbScore: number | null = null;
     if (evals.length > 0) {
       try {
-        const gmbResult = calculateGmbScore(evals[0].id);
+        const gmbResult = await calculateGmbScore(evals[0].id);
         gmbScore = gmbResult.score;
       } catch {
         // no evidence yet
@@ -86,7 +86,7 @@ export async function GET() {
     }
 
     // Get latest GMB audit LPS score
-    const gmbAudits = query<GmbAuditRow>(
+    const gmbAudits = await query<GmbAuditRow>(
       "SELECT project_id, lps_score, rating, your_rank, created_at FROM gmb_audits WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
       [project.id]
     );
@@ -132,8 +132,15 @@ export async function GET() {
   const avgGeo = projectScores.filter((p) => p.geo_score !== null).length > 0
     ? Math.round(projectScores.filter((p) => p.geo_score !== null).reduce((sum, p) => sum + (p.geo_score || 0), 0) / projectScores.filter((p) => p.geo_score !== null).length)
     : null;
-  const avgGmb = projectScores.filter((p) => p.gmb_lps_score !== null).length > 0
-    ? Math.round(projectScores.filter((p) => p.gmb_lps_score !== null).reduce((sum, p) => sum + (p.gmb_lps_score || 0), 0) / projectScores.filter((p) => p.gmb_lps_score !== null).length)
+  // Falls back to the website-readiness score when no live Maps audit exists,
+  // matching how the composite score and the per-project cards resolve GMB.
+  // Averaging only lps_score left the header showing "—" beside project rows
+  // that displayed a number.
+  const gmbValues = projectScores
+    .map((p) => (p.gmb_lps_score !== null ? p.gmb_lps_score : p.gmb_score))
+    .filter((v): v is number => v !== null);
+  const avgGmb = gmbValues.length > 0
+    ? Math.round(gmbValues.reduce((sum, v) => sum + v, 0) / gmbValues.length)
     : null;
 
   // Needs attention: projects with composite score below 50 or below target
@@ -146,7 +153,7 @@ export async function GET() {
   // Activity feed: recent evaluations, missions, GMB audits
   const activity: ActivityItem[] = [];
 
-  const recentEvals = query<{ id: string; project_id: string; primary_query: string; status: string; rrs_score: number | null; created_at: string; project_name: string }>(
+  const recentEvals = await query<{ id: string; project_id: string; primary_query: string; status: string; rrs_score: number | null; created_at: string; project_name: string }>(
     `SELECT e.id, e.project_id, e.primary_query, e.status, e.rrs_score, e.created_at, p.name as project_name
      FROM evaluations e JOIN projects p ON e.project_id = p.id
      ORDER BY e.created_at DESC LIMIT 10`,
@@ -164,7 +171,7 @@ export async function GET() {
     });
   }
 
-  const recentMissions = query<{ id: string; evaluation_id: string; name: string; status: string; created_at: string; project_id: string; project_name: string }>(
+  const recentMissions = await query<{ id: string; evaluation_id: string; name: string; status: string; created_at: string; project_id: string; project_name: string }>(
     `SELECT m.id, m.evaluation_id, m.name, m.status, m.created_at, e.project_id, p.name as project_name
      FROM missions m JOIN evaluations e ON m.evaluation_id = e.id JOIN projects p ON e.project_id = p.id
      ORDER BY m.created_at DESC LIMIT 10`,
@@ -182,7 +189,7 @@ export async function GET() {
     });
   }
 
-  const recentGmbAudits = query<{ id: string; project_id: string; search_query: string; lps_score: number; your_rank: number | null; created_at: string; project_name: string }>(
+  const recentGmbAudits = await query<{ id: string; project_id: string; search_query: string; lps_score: number; your_rank: number | null; created_at: string; project_name: string }>(
     `SELECT g.id, g.project_id, g.search_query, g.lps_score, g.your_rank, g.created_at, p.name as project_name
      FROM gmb_audits g JOIN projects p ON g.project_id = p.id
      ORDER BY g.created_at DESC LIMIT 10`,

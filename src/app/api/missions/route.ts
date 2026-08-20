@@ -12,10 +12,10 @@ const PHASES = [
 export async function GET(req: NextRequest) {
   const evaluationId = req.nextUrl.searchParams.get("evaluation_id");
   if (evaluationId) {
-    const missions = query<Mission>("SELECT * FROM missions WHERE evaluation_id = ? ORDER BY created_at DESC", [evaluationId]);
+    const missions = await query<Mission>("SELECT * FROM missions WHERE evaluation_id = ? ORDER BY created_at DESC", [evaluationId]);
     return NextResponse.json(missions);
   }
-  const missions = query<Mission>("SELECT * FROM missions ORDER BY created_at DESC");
+  const missions = await query<Mission>("SELECT * FROM missions ORDER BY created_at DESC");
   return NextResponse.json(missions);
 }
 
@@ -23,19 +23,22 @@ export async function POST(req: NextRequest) {
   const { evaluation_id } = await req.json();
   if (!evaluation_id) return NextResponse.json({ error: "evaluation_id is required" }, { status: 400 });
 
-  const evaluation = queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [evaluation_id]);
+  const evaluation = await queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [evaluation_id]);
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
 
-  const findings = query<Finding>(
+  const findings = await query<Finding>(
     "SELECT * FROM findings WHERE evaluation_id = ? AND (type = 'opportunity' OR type = 'weakness' OR type = 'gap') ORDER BY CASE WHEN impact_level = 'high' THEN 0 WHEN impact_level = 'medium' THEN 1 ELSE 2 END",
     [evaluation_id]
   );
 
   if (findings.length === 0) return NextResponse.json({ error: "No opportunities found to build a mission. Try re-scoring first." }, { status: 400 });
 
+  // Deactivate any existing active missions for this evaluation — only the latest is active
+  await run("UPDATE missions SET status = 'inactive' WHERE evaluation_id = ? AND status = 'active'", [evaluation_id]);
+
   const missionId = generateId();
   const missionName = `Action Plan: ${evaluation.primary_query}`;
-  run("INSERT INTO missions (id, evaluation_id, name, status) VALUES (?, ?, ?, 'active')", [missionId, evaluation_id, missionName]);
+  await run("INSERT INTO missions (id, evaluation_id, name, status) VALUES (?, ?, ?, 'active')", [missionId, evaluation_id, missionName]);
 
   // Assign findings to phases based on impact level and dimension
   for (const finding of findings) {
@@ -45,22 +48,9 @@ export async function POST(req: NextRequest) {
     // Skip findings that can't be auto-verified — every task must have Check Website
     if (!indicatorCode) continue;
 
-    let phase: string;
+    const phase = assignPhase(finding);
 
-    if (finding.impact_level === "high") {
-      const dim = finding.dimension_code || "";
-      if (["intent", "technical"].includes(dim)) {
-        phase = "phase1";
-      } else {
-        phase = "phase2";
-      }
-    } else if (finding.impact_level === "medium") {
-      phase = "phase3";
-    } else {
-      phase = "phase4";
-    }
-
-    run(
+    await run(
       "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo')",
       [generateId(), missionId, title, finding.description, phase, indicatorCode]
     );
@@ -78,13 +68,13 @@ export async function POST(req: NextRequest) {
     // Skip if we already have a task for this indicator from findings
     if (template.indicator && usedIndicators.has(template.indicator)) continue;
 
-    run(
+    await run(
       "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo')",
       [generateId(), missionId, template.title, template.description, template.phase, template.indicator || ""]
     );
   }
 
-  const mission = queryOne<Mission>("SELECT * FROM missions WHERE id = ?", [missionId]);
+  const mission = await queryOne<Mission>("SELECT * FROM missions WHERE id = ?", [missionId]);
   return NextResponse.json(mission, { status: 201 });
 }
 
@@ -180,12 +170,15 @@ const STRATEGIC_TASKS: { title: string; description: string; phase: string; indi
 const INDICATOR_ACTIONS: Record<string, { title: string; indicator: string }> = {
   "ST-03-I01": { title: "Add Schema.org structured data to your pages", indicator: "schema" },
   "ST-01-I01": { title: "Fix heading structure — ensure single H1 per page", indicator: "h1" },
+  "ST-01-I02": { title: "Use exactly one H1 per page", indicator: "h1" },
   "ST-02-I01": { title: "Add a clear navigation menu", indicator: "nav" },
   "CE-03-I01": { title: "Create a FAQ page targeting common questions", indicator: "faq" },
   "CE-02-I01": { title: "Add pricing information to your page", indicator: "pricing" },
   "CE-01-I01": { title: "Expand page content — aim for 600+ words", indicator: "word_count" },
   "TA-04-I01": { title: "Display licenses and certifications prominently", indicator: "license" },
   "TA-01-I01": { title: "Add author bios and credentials pages", indicator: "author" },
+  "TA-02-I01": { title: "Publish reachable contact details", indicator: "contact" },
+  "TA-03-I01": { title: "Publish reviews and testimonials with Review schema", indicator: "reviews" },
   "UX-01-I01": { title: "Add mobile viewport meta tag", indicator: "viewport" },
   "UX-02-I01": { title: "Add alt text to all images", indicator: "alt_text" },
   "TE-01-I01": { title: "Enable HTTPS with SSL certificate", indicator: "https" },
@@ -194,6 +187,32 @@ const INDICATOR_ACTIONS: Record<string, { title: string; indicator: string }> = 
   "TE-02-I01": { title: "Optimize page load speed — target under 2s", indicator: "speed" },
   "EP-01-I01": { title: "Add social media profile links", indicator: "social" },
 };
+
+/** Natural home for each dimension's work within the 12-month structure. */
+const PHASE_BY_DIMENSION: Record<string, string> = {
+  intent: "phase1",
+  technical: "phase1",
+  content: "phase2",
+  ux: "phase2",
+  trust: "phase3",
+  ecosystem: "phase3",
+};
+
+/**
+ * Opportunities are differentiators, so a widespread one is pulled forward.
+ * Parity work is baseline hygiene the field already has — it lands in its
+ * dimension's natural phase rather than being deferred to months 7-12, which is
+ * where a flat impact-level mapping used to put all of it.
+ */
+function assignPhase(finding: Finding): string {
+  const dim = finding.dimension_code || "";
+  const natural = PHASE_BY_DIMENSION[dim] || "phase3";
+
+  if (finding.type === "opportunity" && finding.impact_level === "high") {
+    return ["intent", "technical"].includes(dim) ? "phase1" : "phase2";
+  }
+  return natural;
+}
 
 function actionableTitle(finding: Finding): { title: string; indicatorCode: string } {
   // If we have a known indicator code, use the predefined actionable title

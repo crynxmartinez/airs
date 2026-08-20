@@ -1,13 +1,20 @@
 import * as cheerio from "cheerio";
 import { chromium } from "playwright";
-import { ScrapedEvidence } from "@/lib/scraper";
+import { extractEvidence, extractMeta, extractContent, LOWER_IS_BETTER } from "@/lib/indicators";
+import type { ScrapedEvidence, PageContent } from "@/lib/indicators";
+import { fetchRobotsTxt } from "@/lib/geo";
+
+/** Page content plus the URL it came from, ready to persist. */
+export type CrawledPageContent = PageContent & { url: string; rendered: boolean };
 
 export interface CrawlResult {
   evidence: ScrapedEvidence[];
   title: string;
   description: string;
   pagesCrawled: number;
-  pages: { url: string; title: string; status: "ok" | "failed" | "js-rendered" }[];
+  pages: { url: string; title: string; status: "ok" | "failed" | "js-rendered" | "blocked" }[];
+  /** One entry per successfully crawled page — the input to coverage analysis. */
+  content: CrawledPageContent[];
 }
 
 export interface CrawlProgress {
@@ -33,6 +40,65 @@ const PRIORITY_PATHS = [
   { patterns: [/\/faq/, /\/frequently-asked/], label: "FAQ" },
   { patterns: [/\/pricing/, /\/plans/, /\/cost/], label: "Pricing" },
 ];
+
+/**
+ * Minimal robots.txt rule set for our user agent. We only ever read pages, but
+ * a competitor-analysis crawler still has to honour the host's stated wishes.
+ */
+interface RobotsRules {
+  disallow: string[];
+  allow: string[];
+  crawlDelayMs: number;
+}
+
+function parseRobots(txt: string | null): RobotsRules {
+  const rules: RobotsRules = { disallow: [], allow: [], crawlDelayMs: 0 };
+  if (!txt) return rules;
+
+  let inScope = false;
+  for (const rawLine of txt.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, "").trim();
+    if (!line) continue;
+
+    const [rawKey, ...rest] = line.split(":");
+    const key = rawKey.trim().toLowerCase();
+    const value = rest.join(":").trim();
+
+    if (key === "user-agent") {
+      // A wildcard group applies to us; named bot groups do not.
+      inScope = value === "*";
+      continue;
+    }
+    if (!inScope) continue;
+
+    if (key === "disallow" && value) rules.disallow.push(value);
+    else if (key === "allow" && value) rules.allow.push(value);
+    else if (key === "crawl-delay") {
+      const seconds = parseFloat(value);
+      if (!isNaN(seconds)) rules.crawlDelayMs = Math.min(seconds * 1000, 10000);
+    }
+  }
+
+  return rules;
+}
+
+function isAllowed(rules: RobotsRules, url: string): boolean {
+  let path: string;
+  try {
+    const parsed = new URL(url);
+    path = parsed.pathname + parsed.search;
+  } catch {
+    return true;
+  }
+
+  const match = (pattern: string) => path.startsWith(pattern);
+  // Longest matching rule wins, with Allow beating Disallow at equal length.
+  const longestDisallow = rules.disallow.filter(match).reduce((a, b) => (b.length > a.length ? b : a), "");
+  const longestAllow = rules.allow.filter(match).reduce((a, b) => (b.length > a.length ? b : a), "");
+
+  if (!longestDisallow) return true;
+  return longestAllow.length >= longestDisallow.length;
+}
 
 async function fetchPage(
   url: string,
@@ -62,20 +128,28 @@ async function fetchPage(
   return { html, loadTime: Date.now() - start, rendered: false };
 }
 
+/**
+ * Detects a shell page whose content only exists after client-side hydration.
+ * Keyed on thin rendered text rather than a specific mount-node id — the App
+ * Router emits no `#__next`, so an id allowlist missed most modern SPAs.
+ */
 function isJsRendered(html: string): boolean {
   const $ = cheerio.load(html);
+  $("script, style, noscript").remove();
   const bodyText = $("body").text().replace(/\s+/g, " ").trim();
-  const hasContent = bodyText.length > 200;
-  const hasRootDiv = $("#root, #app, #__next").length > 0;
-  return !hasContent && hasRootDiv;
+  if (bodyText.length > 500) return false;
+
+  const hasMountPoint = $("#root, #app, #__next, [data-reactroot], [id*='app'], [ng-app]").length > 0;
+  const scriptHeavy = html.length > 8000 && bodyText.length < 200;
+  return hasMountPoint || scriptHeavy;
 }
 
-function discoverPages(html: string, baseUrl: string): string[] {
+function discoverPages(html: string, baseUrl: string, rules: RobotsRules): string[] {
   const $ = cheerio.load(html);
   const base = new URL(baseUrl);
   const found = new Map<string, string>();
 
-  $('a[href]').each((_, el) => {
+  $("a[href]").each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
     const linkText = $(el).text().toLowerCase().trim();
@@ -86,6 +160,7 @@ function discoverPages(html: string, baseUrl: string): string[] {
       if (parsed.hostname !== base.hostname) return;
       if (parsed.pathname === base.pathname) return;
       if (parsed.hash) return;
+      if (!isAllowed(rules, fullUrl)) return;
 
       for (const { patterns, label } of PRIORITY_PATHS) {
         if (patterns.some((p) => p.test(parsed.pathname) || p.test(linkText))) {
@@ -104,93 +179,11 @@ function discoverPages(html: string, baseUrl: string): string[] {
   return sorted.slice(0, MAX_PAGES - 1).map(([url]) => url);
 }
 
-function extractEvidenceFromHtml(
-  html: string,
-  url: string,
-  loadTime: number
-): ScrapedEvidence[] {
-  const $ = cheerio.load(html);
-  const evidence: ScrapedEvidence[] = [];
-  const bodyText = $("body").text().replace(/\s+/g, " ").trim();
-
-  // Structural
-  const h1Count = $("h1").length;
-  const h2Count = $("h2").length;
-  const h3Count = $("h3").length;
-  const navPresent = $("nav").length > 0;
-  const schemaOrg = $('script[type="application/ld+json"]').length > 0;
-
-  evidence.push(
-    { category: "structural", indicator_code: "ST-01-I01", observation: `Page has ${h1Count} H1, ${h2Count} H2, ${h3Count} H3 headings`, source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(h1Count + h2Count + h3Count) },
-    { category: "structural", indicator_code: "ST-02-I01", observation: navPresent ? "Navigation menu present" : "No navigation menu found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: navPresent ? "true" : "false" },
-    { category: "structural", indicator_code: "ST-03-I01", observation: schemaOrg ? "Schema.org structured data found" : "No structured data found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: schemaOrg ? "true" : "false" }
-  );
-
-  // Content
-  const wordCount = bodyText.split(/\s+/).length;
-  const hasPricing = /price|pricing|\$\d|cost|quote|estimate/i.test(bodyText);
-  const hasFaq = /faq|frequently asked/i.test(bodyText) || $("section").filter((_, el) => /faq/i.test($(el).text())).length > 0;
-
-  evidence.push(
-    { category: "content", indicator_code: "CE-01-I01", observation: `Page content has approximately ${wordCount} words`, source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(wordCount) },
-    { category: "content", indicator_code: "CE-02-I01", observation: hasPricing ? "Pricing information found on page" : "No pricing information found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasPricing ? "true" : "false" },
-    { category: "content", indicator_code: "CE-03-I01", observation: hasFaq ? "FAQ section found" : "No FAQ section found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasFaq ? "true" : "false" }
-  );
-
-  // Trust
-  const hasAuthorBio = /author|by\s+[A-Z][a-z]+\s+[A-Z]|written by/i.test(bodyText);
-  const hasContactInfo = /contact|email|phone|call|address/i.test(bodyText);
-  const hasReviews = /review|testimonial|rating|star/i.test(bodyText);
-  const hasLicense = /license|licensed|certified|certification/i.test(bodyText);
-
-  evidence.push(
-    { category: "trust", indicator_code: "TA-01-I01", observation: hasAuthorBio ? "Author bio/reference found" : "No author bio found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasAuthorBio ? "true" : "false" },
-    { category: "trust", indicator_code: "TA-02-I01", observation: hasContactInfo ? "Contact information found" : "No contact information found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasContactInfo ? "true" : "false" },
-    { category: "trust", indicator_code: "TA-03-I01", observation: hasReviews ? "Reviews/testimonials found" : "No reviews/testimonials found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasReviews ? "true" : "false" },
-    { category: "trust", indicator_code: "TA-04-I01", observation: hasLicense ? "License/certification mentioned" : "No license/certification mentioned", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasLicense ? "true" : "false" }
-  );
-
-  // UX
-  const hasViewport = $('meta[name="viewport"]').length > 0;
-  const imgCount = $("img").length;
-  const imgWithAlt = $('img[alt]').length;
-  const imgAltRatio = imgCount > 0 ? Math.round((imgWithAlt / imgCount) * 100) : 100;
-  const internalLinks = $('a[href^="/"], a[href^="' + url + '"]').length;
-  const externalLinks = $('a[href^="http"]').not(`a[href^="${url}"]`).length;
-
-  evidence.push(
-    { category: "ux", indicator_code: "UX-01-I01", observation: hasViewport ? "Mobile viewport meta tag present" : "No mobile viewport meta tag", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasViewport ? "true" : "false" },
-    { category: "ux", indicator_code: "UX-02-I01", observation: `${imgWithAlt} of ${imgCount} images have alt text (${imgAltRatio}%)`, source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(imgAltRatio) },
-    { category: "ux", indicator_code: "UX-03-I01", observation: `${internalLinks} internal links, ${externalLinks} external links`, source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(internalLinks + externalLinks) }
-  );
-
-  // Technical
-  const isHttps = url.startsWith("https://");
-  const hasCanonical = $('link[rel="canonical"]').length > 0;
-  const hasRobots = $('meta[name="robots"]').length > 0;
-
-  evidence.push(
-    { category: "technical", indicator_code: "TE-01-I01", observation: isHttps ? "HTTPS enabled" : "HTTPS not enabled", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: isHttps ? "true" : "false" },
-    { category: "technical", indicator_code: "TE-02-I01", observation: `Page load time: ${loadTime}ms`, source_url: url, evidence_type: "audit", confidence_level: "B", value: String(loadTime) },
-    { category: "technical", indicator_code: "TE-03-I01", observation: hasCanonical ? "Canonical link tag present" : "No canonical link tag", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasCanonical ? "true" : "false" },
-    { category: "technical", indicator_code: "TE-04-I01", observation: hasRobots ? "Robots meta tag present" : "No robots meta tag", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: hasRobots ? "true" : "false" }
-  );
-
-  // Ecosystem
-  const socialLinks = $('a[href*="facebook"], a[href*="twitter"], a[href*="instagram"], a[href*="linkedin"], a[href*="youtube"]').length;
-
-  evidence.push(
-    { category: "ecosystem", indicator_code: "EP-01-I01", observation: socialLinks > 0 ? `${socialLinks} social media links found` : "No social media links found", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(socialLinks) },
-    { category: "ecosystem", indicator_code: "EP-02-I01", observation: externalLinks > 0 ? `${externalLinks} external links (ecosystem presence)` : "No external links", source_url: url, evidence_type: "direct_observation", confidence_level: "A", value: String(externalLinks) }
-  );
-
-  return evidence;
-}
-
 interface PageEvidence {
   url: string;
   evidence: ScrapedEvidence[];
   title: string;
+  html: string;
   loadTime: number;
   rendered: boolean;
 }
@@ -211,11 +204,10 @@ async function crawlSinglePage(
     rendered = result.rendered;
   }
 
-  const $ = cheerio.load(html);
-  const title = $("title").text().trim() || "";
-  const evidence = extractEvidenceFromHtml(html, url, loadTime);
+  const { title } = extractMeta(html);
+  const evidence = extractEvidence({ html, url, loadTime });
 
-  return { url, evidence, title, loadTime, rendered };
+  return { url, evidence, title, html, loadTime, rendered };
 }
 
 function aggregateEvidence(pages: PageEvidence[]): ScrapedEvidence[] {
@@ -231,7 +223,7 @@ function aggregateEvidence(pages: PageEvidence[]): ScrapedEvidence[] {
 
   const aggregated: ScrapedEvidence[] = [];
 
-  for (const [, items] of byIndicator) {
+  for (const [code, items] of byIndicator) {
     if (items.length === 1) {
       aggregated.push(items[0]);
       continue;
@@ -251,11 +243,14 @@ function aggregateEvidence(pages: PageEvidence[]): ScrapedEvidence[] {
         source_url: matching[0].source_url,
       });
     } else {
-      // For numeric indicators: take the max value (best page)
+      // Numeric indicators: pick the competitor's best showing. For load time
+      // and anything else in LOWER_IS_BETTER that means the minimum — taking the
+      // max reported the slowest page and labelled it "best".
+      const lowerIsBetter = LOWER_IS_BETTER.has(code);
       const numeric = items
         .map((e) => ({ ev: e, num: parseFloat(e.value || "0") }))
         .filter((x) => !isNaN(x.num))
-        .sort((a, b) => b.num - a.num);
+        .sort((a, b) => (lowerIsBetter ? a.num - b.num : b.num - a.num));
 
       if (numeric.length > 0) {
         const best = numeric[0].ev;
@@ -279,6 +274,14 @@ export async function crawlCompetitor(
   const pages: CrawlResult["pages"] = [];
   const pageEvidence: PageEvidence[] = [];
 
+  const rules = parseRobots(await fetchRobotsTxt(url));
+  const politeDelay = Math.max(RATE_LIMIT_MS, rules.crawlDelayMs);
+
+  if (!isAllowed(rules, url)) {
+    pages.push({ url, title: "", status: "blocked" });
+    return { evidence: [], title: "", description: "", pagesCrawled: 0, pages, content: [] };
+  }
+
   // Phase 1: Crawl homepage
   onProgress?.({ currentPage: url, pagesCrawled: 0, totalPages: 1, phase: "crawling" });
 
@@ -289,21 +292,16 @@ export async function crawlCompetitor(
     pages.push({ url, title: homeResult.title, status: homeResult.rendered ? "js-rendered" : "ok" });
   } catch {
     pages.push({ url, title: "", status: "failed" });
-    return { evidence: [], title: "", description: "", pagesCrawled: 0, pages };
+    return { evidence: [], title: "", description: "", pagesCrawled: 0, pages, content: [] };
   }
 
-  // Phase 2: Discover additional pages
+  // Phase 2: Discover additional pages from the homepage we already have. This
+  // reuses the (possibly JS-rendered) HTML — re-fetching it plainly meant SPA
+  // link discovery and metadata ran against an empty shell.
   onProgress?.({ currentPage: url, pagesCrawled: 1, totalPages: 1, phase: "discovering" });
 
-  let homeHtml: string;
-  try {
-    const { html } = await fetchPage(url, false);
-    homeHtml = html;
-  } catch {
-    homeHtml = "";
-  }
-
-  const additionalUrls = discoverPages(homeHtml, url);
+  const homeHtml = homeResult.html;
+  const additionalUrls = discoverPages(homeHtml, url, rules);
   const totalPages = 1 + additionalUrls.length;
 
   // Phase 3: Crawl additional pages with rate limiting
@@ -317,7 +315,7 @@ export async function crawlCompetitor(
       phase: "crawling",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_MS));
+    await new Promise((resolve) => setTimeout(resolve, politeDelay));
 
     try {
       const result = await crawlSinglePage(pageUrl, onProgress);
@@ -332,19 +330,23 @@ export async function crawlCompetitor(
   onProgress?.({ currentPage: "", pagesCrawled: pageEvidence.length, totalPages, phase: "aggregating" });
 
   const evidence = aggregateEvidence(pageEvidence);
-
-  // Extract title and description from homepage
-  const $ = cheerio.load(homeHtml);
-  const title = $("title").text().trim() || "";
-  const metaDesc = $('meta[name="description"]').attr("content") || "";
+  const { title, description } = extractMeta(homeHtml);
 
   onProgress?.({ currentPage: "", pagesCrawled: pages.length, totalPages, phase: "done" });
+
+  // Persistable content for every page that actually returned HTML.
+  const content: CrawledPageContent[] = pageEvidence.map((page) => ({
+    url: page.url,
+    rendered: page.rendered,
+    ...extractContent({ html: page.html }),
+  }));
 
   return {
     evidence,
     title,
-    description: metaDesc,
+    description,
     pagesCrawled: pages.length,
     pages,
+    content,
   };
 }

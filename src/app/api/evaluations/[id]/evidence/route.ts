@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const evidence = query<Evidence>(
+  const evidence = await query<Evidence>(
     "SELECT * FROM evidence WHERE evaluation_id = ? ORDER BY collected_at DESC",
     [id]
   );
@@ -25,14 +25,14 @@ export async function POST(
     const ids: string[] = [];
     for (const item of body) {
       const evId = generateId();
-      run(
+      await run(
         `INSERT INTO evidence (id, evaluation_id, competitor_id, category, indicator_code, observation, source_url, evidence_type, confidence_level, value)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [evId, id, item.competitor_id, item.category, item.indicator_code ?? null, item.observation, item.source_url ?? null, item.evidence_type ?? null, item.confidence_level ?? null, item.value ?? null]
       );
       ids.push(evId);
     }
-    const inserted = query<Evidence>(
+    const inserted = await query<Evidence>(
       `SELECT * FROM evidence WHERE id IN (${ids.map(() => "?").join(",")})`,
       ids
     );
@@ -40,12 +40,12 @@ export async function POST(
   }
 
   const evId = generateId();
-  run(
+  await run(
     `INSERT INTO evidence (id, evaluation_id, competitor_id, category, indicator_code, observation, source_url, evidence_type, confidence_level, value)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [evId, id, body.competitor_id, body.category, body.indicator_code ?? null, body.observation, body.source_url ?? null, body.evidence_type ?? null, body.confidence_level ?? null, body.value ?? null]
   );
 
-  const evidence = query<Evidence>("SELECT * FROM evidence WHERE id = ?", [evId]);
+  const evidence = await query<Evidence>("SELECT * FROM evidence WHERE id = ?", [evId]);
   return NextResponse.json(evidence, { status: 201 });
 }

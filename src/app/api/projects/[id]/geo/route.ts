@@ -9,7 +9,7 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
 
-  const evaluations = query<Evaluation>(
+  const evaluations = await query<Evaluation>(
     "SELECT * FROM evaluations WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
     [projectId]
   );
@@ -20,7 +20,7 @@ export async function GET(
 
   const evaluation = evaluations[0];
 
-  const competitors = query<Competitor>(
+  const competitors = await query<Competitor>(
     "SELECT * FROM competitors WHERE evaluation_id = ? ORDER BY created_at ASC",
     [evaluation.id]
   );
@@ -33,7 +33,7 @@ export async function GET(
     robotsData = parseRobotsForAiCrawlers(robotsTxt);
   }
 
-  const result = calculateGeoScore(evaluation.id, robotsData);
+  const result = await calculateGeoScore(evaluation.id, robotsData);
 
   return NextResponse.json({
     ...result,

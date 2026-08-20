@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { discoverDemand, classifyCommercialIntent, acceptsIntent } from "@/lib/demand";
 
+/**
+ * Question-first URL analysis.
+ *
+ * Scrapes the page to find the *topic*, then expands that topic through real autocomplete
+ * data (`discoverDemand`) into the questions people actually ask about it. The old version
+ * returned keyword strings derived from word frequency on the page itself — which measures
+ * what the site already says, not what anyone asks.
+ */
 export async function POST(req: NextRequest) {
   const { url } = await req.json();
   if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
@@ -55,88 +64,65 @@ export async function POST(req: NextRequest) {
     // Extract service/business type from title and h1
     const businessName = title.split(/[|\-–—:]/)[0].trim() || h1 || domain;
 
-    // Build keyword set from title, h1, meta description
-    const stopWords = new Set([
-      "the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "with",
-      "by", "from", "is", "are", "was", "were", "be", "been", "being", "have",
-      "has", "had", "do", "does", "did", "will", "would", "could", "should",
-      "may", "might", "must", "can", "this", "that", "these", "those", "your",
-      "you", "we", "our", "us", "they", "them", "their", "it", "its", "home",
-      "page", "welcome", "contact", "about", "services", "service", "inc", "llc",
-      "co", "company", "official", "site", "website", "best", "top", "near",
-    ]);
+    // The topic seed for autocomplete expansion. The h1 or cleaned title names what the
+    // business *does*, which is the subject people ask questions about — the brand name is
+    // not: nobody types "how much does acme-plumbing-co cost".
+    const topic = deriveTopic(title, h1, metaDesc);
 
-    const rawWords = `${title} ${h1} ${metaDesc}`.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 2 && !stopWords.has(w));
+    // Real autocomplete data — every suggestion is a string people have actually typed.
+    const demand = topic ? await discoverDemand(topic) : [];
 
-    // Count word frequency
-    const wordFreq: Record<string, number> = {};
-    for (const w of rawWords) {
-      wordFreq[w] = (wordFreq[w] || 0) + 1;
-    }
-    const topKeywords = Object.entries(wordFreq)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([w]) => w);
+    // Buying questions only.
+    //
+    // Autocomplete's most popular results for a profession are overwhelmingly *career* and
+    // *definition* queries — the first live run on an insurance broker returned "how to become
+    // a commercial insurance broker", "what is a commercial broker" and three more of the same,
+    // and not one buying question. Those are people who want the job or a dictionary, not a
+    // quote. Every suggestion here becomes a paid AI capture, so an unfiltered list spends real
+    // money asking questions no customer asks, and grades competitors on the answers.
+    //
+    // `classifyCommercialIntent` already exists for exactly this and simply was not called.
+    //
+    // `"commercial"` is passed explicitly. `acceptsIntent(intent)` with no second argument
+    // returns true for *everything* by design — an absent search intent is not allowed to
+    // silently narrow the set. The wizard stopped collecting a search intent when it went
+    // question-first, so the caller has to name it, and a business audit is always commercial.
+    // That drops `career` and `learning`, and keeps `general` — "what is commercial insurance"
+    // is a real buyer question, just an early one.
+    const buying = demand.filter((s) =>
+      acceptsIntent(classifyCommercialIntent(s.question), "commercial")
+    );
 
-    // Build suggestions
-    const suggestions: { query: string; type: string }[] = [];
+    // Buying and evaluating questions first.
+    //
+    // The wizard pre-selects the top three, so this ordering decides what gets paid for.
+    // Autocomplete ranks by raw popularity, and for a profession the most popular queries are
+    // definitional — leaving "what is a commercial broker" to be auto-selected ahead of
+    // "how much does a broker cost", which is the one a buyer actually asks.
+    // Intent is the primary sort and question-shape only the tiebreak, not the other way round.
+    //
+    // Sorting question-shaped items first put every "what is a commercial broker" above every
+    // "business insurance broker melbourne", because for a profession the question-shaped
+    // queries are almost all definitional. The three that got auto-selected — and paid for —
+    // were the three least useful ones on the list.
+    //
+    // A phrase is a perfectly good thing to ask an assistant. "commercial insurance broker
+    // melbourne" is what a buyer types; "what is a commercial broker" is what a student types.
+    const INTENT_RANK: Record<string, number> = { buying: 0, evaluating: 1, general: 2 };
+    const rankOf = (q: string) => INTENT_RANK[classifyCommercialIntent(q)] ?? 3;
 
-    // 1. Business name + location
-    if (businessName && locationList.length > 0) {
-      for (const loc of locationList) {
-        suggestions.push({ query: `${businessName.toLowerCase()} ${loc.toLowerCase()}`, type: "brand + location" });
-      }
-    }
-
-    // 2. Top keyword + location
-    if (topKeywords.length > 0 && locationList.length > 0) {
-      for (const loc of locationList) {
-        suggestions.push({ query: `${topKeywords[0]} ${loc.toLowerCase()}`, type: "service + location" });
-      }
-    }
-
-    // 3. Top keywords combined
-    if (topKeywords.length >= 2) {
-      suggestions.push({ query: topKeywords.slice(0, 3).join(" "), type: "keywords" });
-    }
-
-    // 4. H1 as a query
-    if (h1 && h1.length > 5 && h1.length < 60) {
-      suggestions.push({ query: h1.toLowerCase(), type: "page heading" });
-    }
-
-    // 5. Title-based query (cleaned)
-    if (title && title.length > 5) {
-      const cleanTitle = title.split(/[|\-–—:]/)[0].trim().toLowerCase();
-      if (cleanTitle.length > 5 && cleanTitle.length < 60) {
-        suggestions.push({ query: cleanTitle, type: "page title" });
-      }
-    }
-
-    // 6. Top keyword alone
-    if (topKeywords.length > 0) {
-      suggestions.push({ query: topKeywords[0], type: "single keyword" });
-    }
-
-    // 7. Domain name
-    if (domain && domain.length > 2) {
-      suggestions.push({ query: domain, type: "brand name" });
-    }
-
-    // Deduplicate
-    const seen = new Set<string>();
-    const unique = suggestions.filter((s) => {
-      const key = s.query.toLowerCase().trim();
-      if (seen.has(key) || key.length < 3) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 8);
+    const questions = [...buying]
+      .sort(
+        (a, b) =>
+          rankOf(a.question) - rankOf(b.question) ||
+          Number(b.isQuestion) - Number(a.isQuestion)
+      )
+      .slice(0, 12)
+      .map((s) => ({ question: s.question, source: s.source }));
 
     return NextResponse.json({
-      suggestions: unique,
+      questions,
+      topic,
       pageTitle: title,
       metaDescription: metaDesc,
       h1,
@@ -148,4 +134,33 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : "Failed to analyze URL";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+/**
+ * The topic people would ask about, from the page's own description of itself.
+ *
+ * Prefers the h1 ("Emergency Plumbing Services") over the title, which usually leads with
+ * the brand ("Acme Co | Emergency Plumbing"). Strips the brand segment when the title is
+ * all that exists, and gives up rather than guessing — an empty topic means no suggestions,
+ * and the user types their own questions, which beats suggestions about the wrong subject.
+ */
+function deriveTopic(title: string, h1: string, metaDesc: string): string {
+  const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+
+  const candidates: string[] = [];
+  if (h1) candidates.push(clean(h1));
+  if (title) {
+    const segments = title.split(/[|\-–—:]/).map(clean).filter(Boolean);
+    // The longer segment tends to be the descriptive one; the shorter is the brand.
+    candidates.push(...segments.sort((a, b) => b.length - a.length));
+  }
+  if (metaDesc) candidates.push(clean(metaDesc).split(/[.!?]/)[0]);
+
+  for (const c of candidates) {
+    const words = c.split(/\s+/);
+    if (words.length >= 2 && words.length <= 8 && c.length >= 8 && c.length <= 80) {
+      return c.toLowerCase();
+    }
+  }
+  return "";
 }

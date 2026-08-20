@@ -3,7 +3,7 @@ import { query, queryOne, run, generateId } from "@/lib/db";
 import type { Project } from "@/types";
 
 export async function GET() {
-  const projects = query<Project & { evaluation_count: number; competitor_count: number }>(`
+  const projects = await query<Project & { evaluation_count: number; competitor_count: number }>(`
     SELECT p.*,
       (SELECT COUNT(*) FROM evaluations WHERE project_id = p.id) as evaluation_count,
       (SELECT COUNT(*) FROM competitors WHERE evaluation_id IN (SELECT id FROM evaluations WHERE project_id = p.id)) as competitor_count
@@ -23,11 +23,11 @@ export async function POST(req: NextRequest) {
 
   const id = generateId();
 
-  run(
-    "INSERT INTO projects (id, name, description) VALUES (?, ?, ?)",
-    [id, body.name, body.description ?? null]
+  await run(
+    "INSERT INTO projects (id, name, description, target_location) VALUES (?, ?, ?, ?)",
+    [id, body.name, body.description ?? null, body.target_location ?? null]
   );
 
-  const project = queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
+  const project = await queryOne<Project>("SELECT * FROM projects WHERE id = ?", [id]);
   return NextResponse.json(project, { status: 201 });
 }

@@ -31,3 +31,116 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* ---------------------------------------------------------------- report screen */
+
+/* A report is a document, not an app screen: fixed measure, white page, dark text. */
+.report-canvas {
+  --background: #ffffff;
+}
+
+.report-page {
+  margin: 0 auto;
+  max-width: 210mm;          /* A4 content width, so the screen view matches the PDF */
+  padding: 14mm 16mm 18mm;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* Keep a heading with the block it introduces, and never split a finding card. */
+.report-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.report-section > h2,
+.report-section > h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.report-page-break {
+  break-before: page;
+  page-break-before: always;
+}
+
+/* ---------------------------------------------------------------- print */
+
+@page {
+  size: A4;
+  /* The running header/footer are drawn by the document itself, so the page margin
+     only needs to clear the printer's unprintable edge. */
+  margin: 12mm 12mm 14mm;
+}
+
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* The app shell is excluded from the tree on report routes (see AppChrome), so
+     nothing here is load-bearing for hiding it — these rules only neutralise the
+     scroll containers in case a report is ever printed from inside the shell. */
+  body > div {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+
+  /* Hide app chrome, but never the report's own <header>/<footer> — the report
+     title block is a <header> inside .report-page and must survive to page 1. */
+  aside:not(.report-page *),
+  nav:not(.report-page *),
+  header:not(.report-page *),
+  .no-print {
+    display: none !important;
+  }
+
+  .report-page {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Print backgrounds and borders as designed rather than dropping them. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Avoid orphaned rows and headings across page boundaries. */
+  table {
+    break-inside: auto;
+  }
+  tr,
+  img,
+  svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+  h1, h2, h3, h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
-import { TopBar } from "@/components/topbar";
+import { AppChrome } from "@/components/app-chrome";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,15 +29,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar />
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <TopBar />
-            <main className="flex-1 overflow-y-auto bg-[var(--background)] p-6">
-              {children}
-            </main>
-          </div>
-        </div>
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

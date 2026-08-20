@@ -5,6 +5,7 @@ import { scrapeGoogleMaps, analyzeGmbCompetitors } from "@/lib/gmb-scraper";
 import { calculateLpsScore } from "@/lib/gmb-score";
 import { generateGmbFindings } from "@/lib/gmb-findings";
 import { generateGmbRecommendations } from "@/lib/gmb-recommendations";
+import { recordScoreSnapshot } from "@/lib/snapshot";
 
 export async function POST(
   req: NextRequest,
@@ -12,7 +13,7 @@ export async function POST(
 ) {
   const { id: projectId } = await params;
 
-  const evaluations = query<Evaluation>(
+  const evaluations = await query<Evaluation>(
     "SELECT * FROM evaluations WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
     [projectId]
   );
@@ -56,7 +57,7 @@ export async function POST(
 
     // Store in DB
     const auditId = generateId();
-    run(
+    await run(
       `INSERT INTO gmb_audits (id, project_id, evaluation_id, search_query, location, lps_score, rating, your_rank, total_found, avg_rating, avg_review_count, findings_json, recommendations_json)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -80,7 +81,7 @@ export async function POST(
     for (const biz of result.businesses) {
       const bizId = generateId();
       const isYours = analysis.yourBusiness?.placeId === biz.placeId;
-      run(
+      await run(
         `INSERT INTO gmb_businesses (id, gmb_audit_id, place_id, name, address, phone, website, rating, reviews_count, category_name, categories, is_open, opening_hours, latitude, longitude, url, photo_count, question_count, description, city, state, postal_code, price_level, permanently_closed, rank, is_your_business)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -112,6 +113,11 @@ export async function POST(
           isYours ? 1 : 0,
         ]
       );
+    }
+
+    // Auto-record multi-score snapshot (new LPS score may change composite)
+    if (evaluation.rrs_score != null) {
+      await recordScoreSnapshot(projectId, evaluation.id);
     }
 
     return NextResponse.json({

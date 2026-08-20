@@ -20,8 +20,8 @@ export interface GmbScoreResult {
   categoryScores: { profile: number; website: number; content: number; reviews: number };
 }
 
-export function calculateGmbScore(evaluationId: string): GmbScoreResult {
-  const evidence = query<Evidence>(
+export async function calculateGmbScore(evaluationId: string): Promise<GmbScoreResult> {
+  const evidence = await query<Evidence>(
     "SELECT * FROM evidence WHERE evaluation_id = ?",
     [evaluationId]
   );

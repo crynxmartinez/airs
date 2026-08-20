@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   MapPin, Loader2, ArrowLeft, CheckCircle2, AlertTriangle,
   XCircle, RefreshCw, FileText, Star, Search, Trophy, TrendingUp,
+  Globe, Sparkles, Lightbulb,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { cn } from "@/lib/utils";
 
 interface GmbCheck {
   code: string;
@@ -185,6 +187,15 @@ export default function GmbProfileAuditPage() {
   const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [location, setLocation] = useState("");
+  const [hasScanned, setHasScanned] = useState(false);
+  const [showScanForm, setShowScanForm] = useState(false);
+
+  // Scan form — URL analysis + query suggestions
+  const [scanUrl, setScanUrl] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ query: string; type: string }[]>([]);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [pageInfo, setPageInfo] = useState<{ title: string; domain: string; businessName: string } | null>(null);
 
   async function loadGmb() {
     try {
@@ -206,12 +217,72 @@ export default function GmbProfileAuditPage() {
   useEffect(() => {
     let active = true;
     (async () => {
+      // Fetch project to get target_location
+      try {
+        const projRes = await fetch(`/api/projects/${projectId}`);
+        if (projRes.ok) {
+          const proj = await projRes.json();
+          if (proj.target_location) setLocation(proj.target_location);
+        }
+      } catch {}
+      // Check if a previous GMB scrape audit exists
+      try {
+        const auditRes = await fetch(`/api/projects/${projectId}/gmb/audits`);
+        if (auditRes.ok) {
+          const audits = await auditRes.json();
+          if (Array.isArray(audits) && audits.length > 0) {
+            setHasScanned(true);
+          }
+        }
+      } catch {}
+      // Also load AIRS-derived GMB readiness (secondary data)
       await loadGmb();
       if (active) setLoading(false);
     })();
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // Pre-fill the URL from evaluation data once, without a synchronous setState in an
+  // effect (which triggers a cascading render). The ref makes it a one-shot.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (prefilled.current || !data?.siteUrl) return;
+    prefilled.current = true;
+    setScanUrl((current) => current || data.siteUrl);
+  }, [data]);
+
+  async function analyzeScanUrl() {
+    if (!scanUrl) return;
+    setAnalyzing(true);
+    setSuggestError(null);
+    setSuggestions([]);
+    setPageInfo(null);
+    try {
+      const res = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scanUrl }),
+      });
+      const d = await res.json();
+      if (d.error) {
+        setSuggestError(d.error);
+      } else {
+        setSuggestions(d.suggestions || []);
+        setPageInfo({
+          title: d.pageTitle || "",
+          domain: d.domain || "",
+          businessName: d.businessName || "",
+        });
+        if (!searchQuery && d.suggestions?.length > 0) {
+          setSearchQuery(d.suggestions[0].query);
+        }
+      }
+    } catch {
+      setSuggestError("Could not analyze this URL. You can still type a query manually.");
+    }
+    setAnalyzing(false);
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -237,6 +308,8 @@ export default function GmbProfileAuditPage() {
         const json = await res.json();
         setScrapeData(json);
         setScrapeError(null);
+        setHasScanned(true);
+        setShowScanForm(false);
       }
     } catch {
       setScrapeError("Failed to connect to GMB scraper");
@@ -261,14 +334,14 @@ export default function GmbProfileAuditPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">GMB Profile Audit</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Google My Business Local Search Readiness</p>
+            <h1 className="text-2xl font-bold text-slate-900">Maps Audit</h1>
+            <p className="mt-0.5 text-sm text-slate-500">Google Maps Competitor Scan & Local Pack Visibility</p>
           </div>
         </div>
         <EmptyState
           icon={<MapPin className="h-7 w-7" />}
           title="No evaluation found"
-          description="Create an evaluation and crawl your site first to see your GMB readiness score."
+          description="Create an evaluation and crawl your site first to run a Maps audit."
           action={
             <Link href={`/projects/${projectId}/evaluations/new`}>
               <Button>
@@ -278,6 +351,77 @@ export default function GmbProfileAuditPage() {
             </Link>
           }
         />
+      </div>
+    );
+  }
+
+  // Scan-first flow: if no GMB scrape has been done and no scrape data loaded, show scan form
+  if (!hasScanned && !scrapeData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Link href={`/projects/${projectId}`} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Maps Audit</h1>
+            <p className="mt-0.5 text-sm text-slate-500">Google Maps Competitor Scan & Local Pack Visibility</p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
+              <Search className="h-6 w-6 text-blue-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Scan Google Maps</h2>
+              <p className="text-sm text-slate-500">Find your business and competitors on Google Maps</p>
+            </div>
+          </div>
+          <p className="text-sm text-slate-600 mb-6">
+            Search Google Maps for businesses ranking in your area. We&apos;ll identify your business,
+            compare against competitors, and show where you rank.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-slate-500 mb-1 block">Search Query</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={data.primaryQuery || "e.g., plumber, dentist, restaurant"}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500 mb-1 block">Location</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g., Chicago, IL"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+            {scrapeError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-500" />
+                  <p className="text-xs text-red-700">{scrapeError}</p>
+                </div>
+              </div>
+            )}
+            <Button onClick={handleScrape} disabled={scrapeLoading || !searchQuery || !location} className="w-full">
+              {scrapeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {scrapeLoading ? "Scanning Google Maps..." : "Start Maps Audit"}
+            </Button>
+            {scrapeLoading && (
+              <p className="text-center text-xs text-slate-500">This can take 30-60 seconds.</p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -301,11 +445,175 @@ export default function GmbProfileAuditPage() {
             <p className="mt-0.5 text-sm text-slate-500">Google Maps Competitor Scan & Local Pack Visibility</p>
           </div>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          {hasScanned && (
+            <Link href={`/projects/${projectId}/gmb/report`}>
+              <Button variant="outline">
+                <FileText className="h-4 w-4" />
+                Report
+              </Button>
+            </Link>
+          )}
+          <Button variant="outline" onClick={() => setShowScanForm(!showScanForm)}>
+            <Search className="h-4 w-4" />
+            New Scan
+          </Button>
+        </div>
       </div>
+
+      {/* Scan form — collapsible */}
+      {showScanForm && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-800">Scan Google Maps</h2>
+          </div>
+          <p className="text-xs text-slate-500">
+            Enter your website URL to get query suggestions, then scan Google Maps to see where you rank against competitors.
+          </p>
+
+          {/* Step 1: URL + Analyze */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 mb-1 block">Your Website URL</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="url"
+                  value={scanUrl}
+                  onChange={(e) => setScanUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && analyzeScanUrl()}
+                  placeholder="https://yoursite.com"
+                  className="w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </div>
+              <Button onClick={analyzeScanUrl} disabled={analyzing || !scanUrl} variant="secondary">
+                {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                Analyze
+              </Button>
+            </div>
+          </div>
+
+          {/* Page info preview */}
+          {pageInfo && (
+            <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-2.5">
+              <p className="text-xs text-slate-500">
+                Detected: <span className="font-medium text-slate-700">{pageInfo.businessName || pageInfo.domain}</span>
+              </p>
+              {pageInfo.title && <p className="mt-0.5 truncate text-xs text-slate-400">{pageInfo.title}</p>}
+            </div>
+          )}
+
+          {/* Suggest error */}
+          {suggestError && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+              {suggestError}
+            </div>
+          )}
+
+          {/* Step 2: Query suggestions */}
+          {suggestions.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center gap-1.5">
+                <Lightbulb className="h-4 w-4 text-amber-500" />
+                <label className="text-xs font-medium text-slate-700">Suggested Search Queries</label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSearchQuery(s.query)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                      searchQuery === s.query
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-blue-400 hover:bg-blue-50"
+                    )}
+                  >
+                    {s.query}
+                    <span className={cn(
+                      "ml-1.5 text-xs",
+                      searchQuery === s.query ? "text-blue-200" : "text-slate-400"
+                    )}>
+                      {s.type}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Query + Location + Scan */}
+          <div className="flex flex-wrap gap-3">
+            <div className="flex-1 min-w-[180px]">
+              <label className="text-xs font-medium text-slate-500 mb-1 block">Search Query</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="e.g., plumber, dentist, restaurant"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <label className="text-xs font-medium text-slate-500 mb-1 block">Location</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g., Sydney, Australia"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={handleScrape} disabled={scrapeLoading || !searchQuery || !location}>
+                {scrapeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                Scan Maps
+              </Button>
+            </div>
+          </div>
+
+          {scrapeError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                <p className="text-xs text-red-700">{scrapeError}</p>
+              </div>
+            </div>
+          )}
+          {scrapeLoading && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-blue-500" />
+                <p className="text-xs text-slate-500">Scanning Google Maps... This can take 30-60 seconds.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Scrape loading state */}
+      {scrapeLoading && !showScanForm && (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-500" />
+            <p className="text-sm text-slate-500">Scanning Google Maps... This can take 30-60 seconds.</p>
+          </div>
+        </div>
+      )}
+
+      {/* No scan data yet prompt */}
+      {!scrapeData && !scrapeLoading && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-3">
+            <Search className="h-5 w-5 text-blue-500" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">No Maps scan data yet</p>
+              <p className="text-xs text-blue-600">Click &quot;New Scan&quot; above to scan Google Maps for your business and competitors.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Website GMB Readiness section — from AIRS crawl */}
       <div>
@@ -387,75 +695,14 @@ export default function GmbProfileAuditPage() {
         })}
       </div>
 
-      {/* Google Maps Competitor Scan — live Apify scan */}
-      <div>
-        <div className="mb-3 flex items-center gap-2">
-          <Search className="h-4 w-4 text-blue-500" />
-          <h2 className="text-sm font-semibold text-slate-600">Google Maps Competitor Scan</h2>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-600">live data</span>
-        </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Search className="h-5 w-5 text-blue-500" />
-          <h2 className="text-sm font-semibold text-slate-800">Scan Google Maps</h2>
-        </div>
-        <p className="text-xs text-slate-500 mb-4">
-          Search Google Maps for businesses ranking in your area. We&apos;ll identify your business, compare against competitors, and show where you rank.
-        </p>
-
-        {/* Search form */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Search Query</label>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={data.primaryQuery || "e.g., plumber, dentist, restaurant"}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
+      {/* Scrape results — from Google Maps scan */}
+      {scrapeData && !scrapeLoading && (
+        <div className="space-y-4">
+          <div className="mb-1 flex items-center gap-2">
+            <Search className="h-4 w-4 text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-600">Google Maps Scan Results</h2>
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-600">live data</span>
           </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="text-xs font-medium text-slate-500 mb-1 block">Location</label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g., Chicago, IL"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <div className="flex items-end">
-            <Button onClick={handleScrape} disabled={scrapeLoading || !searchQuery || !location}>
-              {scrapeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Scan Maps
-            </Button>
-          </div>
-        </div>
-
-        {/* Scrape error */}
-        {scrapeError && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <p className="text-xs text-red-700">{scrapeError}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Scrape loading */}
-        {scrapeLoading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-blue-500" />
-              <p className="text-xs text-slate-500">Scanning Google Maps... This can take 30-60 seconds.</p>
-            </div>
-          </div>
-        )}
-
-        {/* Scrape results */}
-        {scrapeData && !scrapeLoading && (
-          <div className="space-y-4">
             {/* Analysis summary */}
             {sa && (
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -591,8 +838,6 @@ export default function GmbProfileAuditPage() {
             )}
           </div>
         )}
-      </div>
-      </div>
 
       {/* LPS Score from scrape */}
       {scrapeData?.scoreResult && !scrapeLoading && (

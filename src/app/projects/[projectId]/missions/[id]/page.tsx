@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target, Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, FileText, TrendingUp, ArrowRight } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target, Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, FileText, TrendingUp, ArrowRight, Edit2, Check, X } from "lucide-react";
 import type { Mission, MissionTask } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -53,6 +53,9 @@ export default function MissionDetailPage() {
   const [verifyingTaskId, setVerifyingTaskId] = useState<string | null>(null);
   const [verifyResults, setVerifyResults] = useState<Record<string, { passed: boolean; detail: string; currentValue: string }>>({});
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const loadData = useCallback(() => {
     fetch(`/api/missions/${missionId}`).then((r) => r.json()).then((d) => {
@@ -72,6 +75,23 @@ export default function MissionDetailPage() {
       else next.add(phaseKey);
       return next;
     });
+  }
+
+  async function saveName() {
+    if (!nameValue.trim() || !mission) return;
+    setSavingName(true);
+    try {
+      await fetch(`/api/missions/${missionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nameValue.trim() }),
+      });
+      setMission({ ...mission, name: nameValue.trim() });
+      setEditingName(false);
+    } catch {
+      // ignore
+    }
+    setSavingName(false);
   }
 
   async function deleteMission() {
@@ -142,7 +162,38 @@ export default function MissionDetailPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{mission.name}</h1>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveName();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  autoFocus
+                  className="rounded-lg border border-blue-400 px-3 py-1.5 text-2xl font-bold text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button onClick={saveName} disabled={savingName} className="rounded-lg p-2 text-green-600 hover:bg-green-50">
+                  {savingName ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+                </button>
+                <button onClick={() => setEditingName(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900">{mission.name}</h1>
+                <button
+                  onClick={() => { setNameValue(mission.name); setEditingName(true); }}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  title="Rename mission"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <p className="mt-0.5 text-sm text-slate-500">{done}/{mission.tasks.length} tasks · {progress}% complete</p>
           </div>
         </div>

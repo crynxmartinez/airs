@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const { id: projectId } = await params;
 
-  const audits = query<{ id: string; recommendations_json: string; created_at: string }>(
+  const audits = await query<{ id: string; recommendations_json: string; created_at: string }>(
     "SELECT id, recommendations_json, created_at FROM gmb_audits WHERE project_id = ? ORDER BY created_at DESC LIMIT 1",
     [projectId]
   );

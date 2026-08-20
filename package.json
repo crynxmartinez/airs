@@ -6,9 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "audit": "node --experimental-strip-types scripts/audit.ts"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "apify-client": "^2.24.0",
     "better-sqlite3": "^13.0.2",
     "cheerio": "^1.2.0",
@@ -17,6 +20,7 @@
     "crawlee": "^3.17.0",
     "lucide-react": "^1.28.0",
     "next": "16.2.12",
+    "pg": "^8.23.0",
     "playwright": "^1.62.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -26,7 +30,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20",
+    "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
