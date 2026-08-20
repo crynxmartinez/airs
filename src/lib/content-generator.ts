@@ -14,11 +14,15 @@ interface ResearchData {
 }
 
 /**
- * Research a question using Tavily — runs 3-5 varied queries to gather
- * comprehensive data before writing.
+ * Research a question using Tavily — runs gap-aware queries based on what
+ * competitors already cover vs what's missing, plus generic baseline queries.
  */
-async function researchTopic(question: string, location?: string): Promise<ResearchData> {
-  const queries = buildSearchQueries(question, location);
+async function researchTopic(
+  question: string,
+  location?: string,
+  taskContext?: TaskContext | null
+): Promise<ResearchData> {
+  const queries = buildGapAwareQueries(question, location, taskContext);
   const allResults: TavilyResult[] = [];
   const seenUrls = new Set<string>();
 
@@ -60,13 +64,78 @@ async function researchTopic(question: string, location?: string): Promise<Resea
   return { facts, sources, statistics };
 }
 
-function buildSearchQueries(question: string, location?: string): string[] {
-  const queries = [question];
+/**
+ * Build gap-aware search queries. Analyzes what competitors already cover
+ * (from their passages and headings) and generates targeted queries for
+ * the aspects they DON'T cover well — the actual gaps to fill.
+ */
+function buildGapAwareQueries(
+  question: string,
+  location?: string,
+  taskContext?: TaskContext | null
+): string[] {
+  const queries: string[] = [];
 
+  // 1. Always include the core question
+  queries.push(question);
   if (location) {
     queries.push(`${question} ${location}`);
   }
 
+  // 2. If we have coverage gap data, build targeted queries for what's missing
+  if (taskContext && taskContext.coverageGaps.length > 0) {
+    // Extract topics competitors already cover well (from their headings)
+    const coveredTopics = new Set<string>();
+    for (const gap of taskContext.coverageGaps) {
+      if (gap.heading && gap.score >= 60) {
+        coveredTopics.add(gap.heading.toLowerCase().trim());
+      }
+    }
+
+    // Extract keywords from competitor passages to understand landscape
+    const competitorKeywords = new Set<string>();
+    for (const gap of taskContext.coverageGaps) {
+      if (gap.passage) {
+        const words = gap.passage.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length > 4 && !STOP_WORDS.has(w));
+        for (const w of words.slice(0, 5)) {
+          competitorKeywords.add(w);
+        }
+      }
+    }
+
+    // Check what aspects are NOT well covered by competitors
+    // Low score or low specificity = gap opportunity
+    const weakAreas = taskContext.coverageGaps.filter(
+      (g) => g.score < 50 || g.specificity < 0.4
+    );
+
+    if (weakAreas.length > 0) {
+      // Research the weak areas — what competitors don't cover well
+      const weakHeadings = weakAreas
+        .map((g) => g.heading)
+        .filter((h): h is string => h !== null && h.length > 3);
+      for (const heading of weakHeadings.slice(0, 2)) {
+        queries.push(`${question} ${heading}`);
+      }
+    }
+
+    // If competitors have low term coverage, research deeper/more specific angles
+    const lowTermCoverage = taskContext.coverageGaps.some((g) => g.termCoverage < 0.5);
+    if (lowTermCoverage) {
+      queries.push(`${question} detailed guide specifics`);
+    }
+
+    // If this is a depth gap, research for more depth
+    const depthGaps = taskContext.coverageGaps.filter((g) => g.level === "depth_gap" || g.level === "thin");
+    if (depthGaps.length > 0) {
+      queries.push(`${question} in-depth analysis data statistics`);
+    }
+  }
+
+  // 3. Add question-type-specific queries (cost, comparison, how-to, etc.)
   const lower = question.toLowerCase();
   if (lower.includes("cost") || lower.includes("price") || lower.includes("how much")) {
     queries.push(`${question} average cost 2025 2026`);
@@ -82,8 +151,21 @@ function buildSearchQueries(question: string, location?: string): string[] {
     queries.push(`${question} case study`);
   }
 
-  return queries.slice(0, 5);
+  // 4. Add data/research queries for authority content
+  queries.push(`${question} statistics data research`);
+
+  return queries.slice(0, 7);
 }
+
+const STOP_WORDS = new Set([
+  "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
+  "her", "was", "one", "our", "out", "day", "get", "has", "him", "his",
+  "how", "man", "new", "now", "old", "see", "two", "way", "who", "boy",
+  "did", "its", "let", "put", "say", "she", "too", "use", "with", "that",
+  "this", "have", "from", "they", "know", "want", "been", "good", "much",
+  "some", "time", "very", "just", "your", "what", "about", "which", "when",
+  "there", "their", "would", "could", "also", "more", "such", "only", "most",
+]);
 
 function selectStyle(answerType: string): "case_study" | "comparison" {
   if (answerType === "comparison") return "comparison";
@@ -446,7 +528,7 @@ export async function generateContent(
   const question = brief.question;
   const location = evaluation.target_location || undefined;
 
-  const research = await researchTopic(question, location);
+  const research = await researchTopic(question, location, taskContext);
 
   const style = selectStyle(brief.answer_type);
   const prompt = buildPrompt(question, style, research, brief, evaluation, coverage, taskContext);
