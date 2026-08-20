@@ -3,8 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target, Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, FileText, TrendingUp, ArrowRight, Edit2, Check, X } from "lucide-react";
-import type { Mission, MissionTask } from "@/types";
+import {
+  ArrowLeft, Loader2, AlertCircle, CheckCircle2, Circle, Trash2, Target,
+  Search, Globe, AlertTriangle, ChevronDown, ChevronRight, RefreshCw,
+  FileText, TrendingUp, ArrowRight, Edit2, Check, X, Download, Sparkles,
+  ExternalLink, BarChart3, Award, Ship,
+} from "lucide-react";
+import type { Mission, MissionTask, ContentBrief, CitationDashboard } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -25,8 +30,12 @@ interface AuditResult {
   tasks_created: number;
 }
 
+interface MissionTaskWithBrief extends MissionTask {
+  content_brief: ContentBrief | null;
+}
+
 interface MissionDetail extends Mission {
-  tasks: MissionTask[];
+  tasks: MissionTaskWithBrief[];
   site_url: string | null;
   audit_data: { url: string; checks: AuditCheck[]; summary: { passed: number; warned: number; failed: number } } | null;
 }
@@ -37,6 +46,14 @@ const PHASES = [
   { key: "phase3", label: "Authority & Trust Building", timeline: "Month 4-6", description: "Establish credibility signals that AI systems and search engines reward. Add author bios, display licenses, collect reviews, build social media presence, and earn third-party citations." },
   { key: "phase4", label: "Scale & AI Visibility", timeline: "Month 7-12", description: "Long-term strategic work — topic clusters, digital PR, Answer Engine Optimization (AEO) for ChatGPT/Perplexity, content refresh cycles, and competitive positioning. This is where compounding growth happens." },
 ];
+
+const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
+  coverage_gap: { label: "Gap", color: "bg-orange-100 text-orange-700" },
+  content_brief: { label: "Brief", color: "bg-purple-100 text-purple-700" },
+  finding: { label: "Finding", color: "bg-blue-100 text-blue-700" },
+  self_audit: { label: "Audit", color: "bg-teal-100 text-teal-700" },
+  strategic: { label: "Strategic", color: "bg-slate-100 text-slate-600" },
+};
 
 export default function MissionDetailPage() {
   const params = useParams();
@@ -56,6 +73,14 @@ export default function MissionDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [citation, setCitation] = useState<CitationDashboard | null>(null);
+  const [citationLoading, setCitationLoading] = useState(false);
+  const [citationChecking, setCitationChecking] = useState(false);
+  const [generatingTaskId, setGeneratingTaskId] = useState<string | null>(null);
+  const [generateResults, setGenerateResults] = useState<Record<string, { content: string; wordCount: number; style: string; sources: { title: string; url: string }[]; selfCitations: number }>>({});
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [expandedDrafts, setExpandedDrafts] = useState<Set<string>>(new Set());
+  const [shippingTaskId, setShippingTaskId] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
     fetch(`/api/missions/${missionId}`).then((r) => r.json()).then((d) => {
@@ -66,13 +91,30 @@ export default function MissionDetailPage() {
     }).catch(() => setLoading(false));
   }, [missionId, auditUrl, auditResult]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const loadCitation = useCallback(() => {
+    setCitationLoading(true);
+    fetch(`/api/missions/${missionId}/citation`).then((r) => r.json()).then((d) => {
+      if (!d.error) setCitation(d);
+      setCitationLoading(false);
+    }).catch(() => setCitationLoading(false));
+  }, [missionId]);
+
+  useEffect(() => { loadData(); loadCitation(); }, [loadData, loadCitation]);
 
   function togglePhase(phaseKey: string) {
     setCollapsedPhases((prev) => {
       const next = new Set(prev);
       if (next.has(phaseKey)) next.delete(phaseKey);
       else next.add(phaseKey);
+      return next;
+    });
+  }
+
+  function toggleDraft(taskId: string) {
+    setExpandedDrafts((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
       return next;
     });
   }
@@ -100,9 +142,7 @@ export default function MissionDetailPage() {
   async function verifyTask(taskId: string) {
     setVerifyingTaskId(taskId);
     try {
-      const res = await fetch(`/api/missions/${missionId}/tasks/${taskId}/verify`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/missions/${missionId}/tasks/${taskId}/verify`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Verification failed");
       setVerifyResults((prev) => ({
@@ -138,6 +178,57 @@ export default function MissionDetailPage() {
       setAuditError(err instanceof Error ? err.message : "Self-audit failed");
     }
     setAuditing(false);
+  }
+
+  async function runCitationCheck() {
+    setCitationChecking(true);
+    try {
+      const res = await fetch(`/api/missions/${missionId}/citation`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Citation check failed");
+      loadCitation();
+    } catch (err) {
+      console.error("[citation check]", err);
+    }
+    setCitationChecking(false);
+  }
+
+  async function generateContent(taskId: string) {
+    setGeneratingTaskId(taskId);
+    setGenerateError(null);
+    try {
+      const res = await fetch(`/api/missions/${missionId}/tasks/${taskId}/generate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      setGenerateResults((prev) => ({
+        ...prev,
+        [taskId]: {
+          content: data.content,
+          wordCount: data.wordCount,
+          style: data.style,
+          sources: data.sources,
+          selfCitations: data.selfCitations,
+        },
+      }));
+      setExpandedDrafts((prev) => new Set(prev).add(taskId));
+      loadData();
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : "Generation failed");
+    }
+    setGeneratingTaskId(null);
+  }
+
+  async function shipBrief(taskId: string) {
+    setShippingTaskId(taskId);
+    try {
+      const res = await fetch(`/api/missions/${missionId}/tasks/${taskId}/ship`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to ship");
+      loadData();
+    } catch (err) {
+      console.error("[ship]", err);
+    }
+    setShippingTaskId(null);
   }
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>;
@@ -214,47 +305,76 @@ export default function MissionDetailPage() {
         </div>
       </div>
 
-      {/* Next Step Banner */}
-      {progress > 0 && (
-        <div className={`rounded-xl border p-4 ${progress === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}`}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-white ${progress === 100 ? "bg-green-600" : "bg-blue-600"}`}>
-                {progress === 100 ? <CheckCircle2 className="h-4 w-4" /> : <Target className="h-4 w-4" />}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">
-                  {progress === 100
-                    ? "All tasks complete! Time to re-score"
-                    : `${done} of ${mission.tasks.length} tasks done`}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {progress === 100
-                    ? "Re-score your evaluation to see improvements, then check Benchmarks"
-                    : "Keep completing tasks and verifying them with Check Website"}
-                </p>
-              </div>
-            </div>
-            {progress === 100 && mission.evaluation_id && (
-              <div className="flex items-center gap-2">
-                <Link href={`/projects/${projectId}/evaluations/${mission.evaluation_id}`}>
-                  <Button variant="outline" className="px-3 py-1.5 text-xs">
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Re-score
-                  </Button>
-                </Link>
-                <Link href={`/projects/${projectId}/benchmarks`}>
-                  <Button className="px-3 py-1.5 text-xs">
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    Benchmarks
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </Link>
-              </div>
-            )}
+      {/* Citation Dashboard */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-800">Citation Dashboard</h2>
           </div>
+          <Button
+            variant="outline"
+            onClick={runCitationCheck}
+            disabled={citationChecking || !mission.site_url}
+            className="text-xs"
+          >
+            {citationChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+            Check Citations
+          </Button>
         </div>
-      )}
+
+        {citationLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+        ) : citation ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-4 w-4 text-purple-500" />
+                <h3 className="text-sm font-semibold text-slate-700">AI Engines</h3>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-purple-600">{Math.round(citation.ai.citationShare * 100)}%</span>
+                <span className="text-xs text-slate-400">cited</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{citation.ai.citedQueries}/{citation.ai.totalQueries} queries</p>
+              {citation.ai.perEngine.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {citation.ai.perEngine.map((e) => (
+                    <div key={e.engine} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 capitalize">{e.engine}</span>
+                      <span className="text-slate-400">{e.cited}/{e.total} ({Math.round(e.share * 100)}%)</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Globe className="h-4 w-4 text-blue-500" />
+                <h3 className="text-sm font-semibold text-slate-700">Google Top 5</h3>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-blue-600">{citation.google.overallCited}</span>
+                <span className="text-xs text-slate-400">/ {citation.google.overallTotal} pages</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">across {citation.google.questions.length} questions</p>
+              {citation.google.questions.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {citation.google.questions.slice(0, 3).map((q) => (
+                    <div key={q.query} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 truncate max-w-[180px]">{q.query}</span>
+                      <span className="text-slate-400">{q.cited}/{q.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 text-center py-4">No citation data yet. Run a citation check to see your visibility.</p>
+        )}
+      </div>
 
       {/* Phase Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -292,11 +412,7 @@ export default function MissionDetailPage() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-3">
-                  {isCollapsed ? (
-                    <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
-                  )}
+                  {isCollapsed ? <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" /> : <ChevronDown className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />}
                   <div>
                     <h2 className="text-sm font-semibold text-slate-800">{phase.label}</h2>
                     <p className="mt-0.5 text-xs text-slate-500">{phase.timeline} · {phase.description}</p>
@@ -310,44 +426,29 @@ export default function MissionDetailPage() {
 
             {!isCollapsed && (
             <>
-            {/* Self-Audit Panel — only in Phase 1 */}
             {phase.key === "phase1" && (
               <div className="border-b border-slate-100 bg-blue-50/30 px-5 py-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Search className="h-4 w-4 text-blue-500" />
                   <h3 className="text-sm font-semibold text-slate-800">Self-Audit Your Website</h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-3">Audit your site to automatically populate Phase 1 with critical fixes. Each failed check becomes an actionable task.</p>
+                <p className="text-xs text-slate-500 mb-3">Audit your site to automatically populate Phase 1 with critical fixes.</p>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="url"
-                      placeholder="https://yourwebsite.com"
-                      value={auditUrl}
-                      onChange={(e) => setAuditUrl(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && runSelfAudit()}
-                      className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-3 text-sm focus:border-blue-400 focus:outline-none"
-                    />
+                    <input type="url" placeholder="https://yourwebsite.com" value={auditUrl} onChange={(e) => setAuditUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runSelfAudit()} className="w-full rounded-lg border border-slate-200 py-2 pl-10 pr-3 text-sm focus:border-blue-400 focus:outline-none" />
                   </div>
                   <Button onClick={runSelfAudit} disabled={auditing || !auditUrl}>
                     {auditing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     Run Audit
                   </Button>
                 </div>
-
-                {auditError && (
-                  <p className="mt-2 text-sm text-red-600">{auditError}</p>
-                )}
-
+                {auditError && <p className="mt-2 text-sm text-red-600">{auditError}</p>}
                 {auditResult && (
                   <div className="mt-4 space-y-3">
-                    {/* Audit Score */}
                     <div className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-3">
                       <div className="text-center">
-                        <p className={`text-3xl font-bold ${auditResult.total_score >= 80 ? "text-green-600" : auditResult.total_score >= 60 ? "text-yellow-600" : auditResult.total_score >= 40 ? "text-orange-600" : "text-red-600"}`}>
-                          {auditResult.total_score}
-                        </p>
+                        <p className={`text-3xl font-bold ${auditResult.total_score >= 80 ? "text-green-600" : auditResult.total_score >= 60 ? "text-yellow-600" : auditResult.total_score >= 40 ? "text-orange-600" : "text-red-600"}`}>{auditResult.total_score}</p>
                         <p className="text-xs text-slate-400">/ 100</p>
                       </div>
                       <div className="flex-1">
@@ -365,26 +466,17 @@ export default function MissionDetailPage() {
                         <p className="text-xs text-slate-400">tasks added</p>
                       </div>
                     </div>
-
-                    {/* Collapsible audit details */}
                     {[
                       { key: "failed", label: "Failed", icon: AlertCircle, color: "red", checks: auditResult.checks.filter((c) => c.status === "fail") },
                       { key: "warnings", label: "Warnings", icon: AlertTriangle, color: "yellow", checks: auditResult.checks.filter((c) => c.status === "warn") },
                       { key: "passed", label: "Passed", icon: CheckCircle2, color: "green", checks: auditResult.checks.filter((c) => c.status === "pass") },
                     ].map((section) => {
                       const Icon = section.icon;
-                      const colorMap: Record<string, string> = {
-                        red: "text-red-500 bg-red-50 border-red-200",
-                        yellow: "text-yellow-500 bg-yellow-50 border-yellow-200",
-                        green: "text-green-500 bg-green-50 border-green-200",
-                      };
+                      const colorMap: Record<string, string> = { red: "text-red-500 bg-red-50 border-red-200", yellow: "text-yellow-500 bg-yellow-50 border-yellow-200", green: "text-green-500 bg-green-50 border-green-200" };
                       const isOpen = expandedSection === section.key;
                       return (
                         <div key={section.key} className={`rounded-lg border ${colorMap[section.color]} overflow-hidden`}>
-                          <button
-                            onClick={() => setExpandedSection(isOpen ? null : section.key)}
-                            className="flex w-full items-center justify-between px-3 py-2.5"
-                          >
+                          <button onClick={() => setExpandedSection(isOpen ? null : section.key)} className="flex w-full items-center justify-between px-3 py-2.5">
                             <div className="flex items-center gap-2">
                               <Icon className="h-4 w-4" />
                               <span className="text-sm font-semibold text-slate-700">{section.label}</span>
@@ -401,11 +493,7 @@ export default function MissionDetailPage() {
                                     <span className="text-xs font-medium text-slate-400">{check.value}</span>
                                   </div>
                                   <p className="mt-0.5 text-xs text-slate-500">{check.detail}</p>
-                                  {check.recommendation && (
-                                    <p className="mt-1 text-xs text-slate-400">
-                                      <span className="font-semibold">Fix: </span>{check.recommendation}
-                                    </p>
-                                  )}
+                                  {check.recommendation && <p className="mt-1 text-xs text-slate-400"><span className="font-semibold">Fix: </span>{check.recommendation}</p>}
                                 </div>
                               ))}
                             </div>
@@ -418,60 +506,108 @@ export default function MissionDetailPage() {
               </div>
             )}
 
-            {/* Phase tasks */}
             {phaseTasks.length > 0 ? (
               <div className="divide-y divide-slate-50">
                 {phaseTasks.map((task) => {
                   const verifyResult = verifyResults[task.id];
                   const isVerifying = verifyingTaskId === task.id;
+                  const isGenerating = generatingTaskId === task.id;
+                  const isShipping = shippingTaskId === task.id;
+                  const genResult = generateResults[task.id];
+                  const draftExpanded = expandedDrafts.has(task.id);
+                  const sourceInfo = SOURCE_LABELS[task.source] || SOURCE_LABELS.strategic;
+                  const hasBrief = !!task.content_brief;
+                  const briefDraft = task.content_brief?.draft_content;
+                  const hasGeneratedContent = !!genResult || (briefDraft && briefDraft.length > 200);
 
                   return (
                     <div key={task.id} className="px-5 py-4">
                       <div className="flex items-start gap-3">
-                        {task.status === "done" ? (
-                          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-                        ) : (
-                          <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />
-                        )}
-                        <div className="flex-1">
-                          <span className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-800"}`}>
-                            {task.title}
-                          </span>
-                          {task.description && (
-                            <p className={`mt-1 text-xs ${task.status === "done" ? "text-slate-300" : "text-slate-500"}`}>{task.description}</p>
-                          )}
+                        {task.status === "done" ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" /> : <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sourceInfo.color}`}>{sourceInfo.label}</span>
+                          </div>
+                          {task.description && <p className={`mt-1 text-xs ${task.status === "done" ? "text-slate-300" : "text-slate-500"}`}>{task.description}</p>}
 
-                          {/* Verify result */}
-                          {verifyResult && (
-                            <div className={`mt-2 rounded-lg border p-2.5 text-xs ${
-                              verifyResult.passed
-                                ? "border-green-200 bg-green-50 text-green-700"
-                                : "border-orange-200 bg-orange-50 text-orange-700"
-                            }`}>
-                              <div className="flex items-center gap-1.5">
-                                {verifyResult.passed ? (
-                                  <CheckCircle2 className="h-3.5 w-3.5" />
-                                ) : (
-                                  <AlertCircle className="h-3.5 w-3.5" />
-                                )}
-                                <span className="font-medium">{verifyResult.passed ? "Verified — issue resolved!" : "Not yet fixed"}</span>
+                          {hasBrief && task.content_brief && (
+                            <div className="mt-2 rounded-lg border border-purple-100 bg-purple-50/50 p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="h-3.5 w-3.5 text-purple-500" />
+                                <span className="text-xs font-semibold text-purple-700">Content Brief</span>
+                                <span className="text-xs text-slate-400">·</span>
+                                <span className="text-xs text-slate-500 capitalize">{task.content_brief.answer_type}</span>
+                                <span className="text-xs text-slate-400">·</span>
+                                <span className="text-xs text-slate-500">Effort: {task.content_brief.effort}</span>
                               </div>
-                              <p className="mt-1">{verifyResult.detail}</p>
-                              {verifyResult.currentValue && (
-                                <p className="mt-0.5 text-slate-500">Current: {verifyResult.currentValue}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {task.status !== "done" && (
+                                  <>
+                                    <Button variant="outline" onClick={() => generateContent(task.id)} disabled={isGenerating} className="text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50">
+                                      {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                      {isGenerating ? "Generating..." : "Generate with AI"}
+                                    </Button>
+                                    {hasGeneratedContent && (
+                                      <Button variant="outline" onClick={() => toggleDraft(task.id)} className="text-xs text-slate-600 hover:text-slate-700">
+                                        {draftExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                        {draftExpanded ? "Hide" : "View"} Draft
+                                      </Button>
+                                    )}
+                                    {hasGeneratedContent && (
+                                      <a href={`/api/missions/${missionId}/tasks/${task.id}/pdf`} target="_blank" rel="noopener noreferrer">
+                                        <Button variant="outline" className="text-xs text-slate-600 hover:text-slate-700">
+                                          <Download className="h-3.5 w-3.5" /> PDF
+                                        </Button>
+                                      </a>
+                                    )}
+                                    {hasGeneratedContent && (
+                                      <Button variant="outline" onClick={() => shipBrief(task.id)} disabled={isShipping} className="text-xs text-green-600 hover:text-green-700 hover:bg-green-50">
+                                        {isShipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ship className="h-3.5 w-3.5" />}
+                                        Mark Shipped
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              {generateError && generatingTaskId === task.id && <p className="mt-2 text-xs text-red-600">{generateError}</p>}
+                              {draftExpanded && (genResult?.content || briefDraft) && (
+                                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4 max-h-96 overflow-y-auto">
+                                  {genResult && (
+                                    <div className="mb-3 flex items-center gap-3 text-xs">
+                                      <span className="font-medium text-slate-600">{genResult.wordCount} words</span>
+                                      <span className="text-slate-400">·</span>
+                                      <span className="capitalize text-slate-600">{genResult.style.replace("_", " ")}</span>
+                                      <span className="text-slate-400">·</span>
+                                      <span className="text-slate-600">{genResult.selfCitations} self-citations</span>
+                                      <span className="text-slate-400">·</span>
+                                      <span className="text-slate-600">{genResult.sources.length} sources</span>
+                                    </div>
+                                  )}
+                                  <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap text-xs">
+                                    {(genResult?.content || briefDraft)?.substring(0, 2000)}
+                                    {((genResult?.content || briefDraft)?.length ?? 0) > 2000 && (
+                                      <span className="text-slate-400">... ({Math.round(((genResult?.content || briefDraft)?.length ?? 0) / 1000)}k chars total)</span>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           )}
-                        </div>
 
-                        {/* Check Website button — always shown for undone tasks */}
+                          {verifyResult && (
+                            <div className={`mt-2 rounded-lg border p-2.5 text-xs ${verifyResult.passed ? "border-green-200 bg-green-50 text-green-700" : "border-orange-200 bg-orange-50 text-orange-700"}`}>
+                              <div className="flex items-center gap-1.5">
+                                {verifyResult.passed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                                <span className="font-medium">{verifyResult.passed ? "Verified — issue resolved!" : "Not yet fixed"}</span>
+                              </div>
+                              <p className="mt-1">{verifyResult.detail}</p>
+                              {verifyResult.currentValue && <p className="mt-0.5 text-slate-500">Current: {verifyResult.currentValue}</p>}
+                            </div>
+                          )}
+                        </div>
                         {task.status !== "done" && (
-                          <Button
-                            variant="outline"
-                            onClick={() => verifyTask(task.id)}
-                            disabled={isVerifying}
-                            className="shrink-0 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          >
+                          <Button variant="outline" onClick={() => verifyTask(task.id)} disabled={isVerifying} className="shrink-0 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
                             {isVerifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                             Check Website
                           </Button>
@@ -482,9 +618,7 @@ export default function MissionDetailPage() {
                 })}
               </div>
             ) : phase.key !== "phase1" ? null : (
-              <div className="px-5 py-6 text-center">
-                <p className="text-sm text-slate-400">No critical fixes yet. Run the self-audit above to populate this phase.</p>
-              </div>
+              <div className="px-5 py-6 text-center"><p className="text-sm text-slate-400">No critical fixes yet. Run the self-audit above to populate this phase.</p></div>
             )}
             </>
             )}
@@ -492,12 +626,9 @@ export default function MissionDetailPage() {
         );
       })}
 
-      {/* Tasks without a phase (legacy) */}
       {mission.tasks.filter((t) => !t.phase).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-          <div className="border-b border-slate-200 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">Other Tasks</h2>
-          </div>
+          <div className="border-b border-slate-200 px-5 py-3"><h2 className="text-sm font-semibold text-slate-800">Other Tasks</h2></div>
           <div className="divide-y divide-slate-50">
             {mission.tasks.filter((t) => !t.phase).map((task) => {
               const verifyResult = verifyResults[task.id];
@@ -505,34 +636,19 @@ export default function MissionDetailPage() {
               return (
                 <div key={task.id} className="px-5 py-4">
                   <div className="flex items-start gap-3">
-                    {task.status === "done" ? (
-                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
-                    ) : (
-                      <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />
-                    )}
+                    {task.status === "done" ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" /> : <Circle className="mt-0.5 h-5 w-5 shrink-0 text-slate-300" />}
                     <div className="flex-1">
-                      <span className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-800"}`}>
-                        {task.title}
-                      </span>
-                      {task.description && (
-                        <p className={`mt-1 text-xs ${task.status === "done" ? "text-slate-300" : "text-slate-500"}`}>{task.description}</p>
-                      )}
+                      <span className={`text-sm font-medium ${task.status === "done" ? "text-slate-400 line-through" : "text-slate-800"}`}>{task.title}</span>
+                      {task.description && <p className={`mt-1 text-xs ${task.status === "done" ? "text-slate-300" : "text-slate-500"}`}>{task.description}</p>}
                       {verifyResult && (
-                        <div className={`mt-2 rounded-lg border p-2.5 text-xs ${
-                          verifyResult.passed ? "border-green-200 bg-green-50 text-green-700" : "border-orange-200 bg-orange-50 text-orange-700"
-                        }`}>
+                        <div className={`mt-2 rounded-lg border p-2.5 text-xs ${verifyResult.passed ? "border-green-200 bg-green-50 text-green-700" : "border-orange-200 bg-orange-50 text-orange-700"}`}>
                           <span className="font-medium">{verifyResult.passed ? "Verified — issue resolved!" : "Not yet fixed"}</span>
                           <p className="mt-1">{verifyResult.detail}</p>
                         </div>
                       )}
                     </div>
                     {task.status !== "done" && (
-                      <Button
-                        variant="outline"
-                        onClick={() => verifyTask(task.id)}
-                        disabled={isVerifying}
-                        className="shrink-0 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                      >
+                      <Button variant="outline" onClick={() => verifyTask(task.id)} disabled={isVerifying} className="shrink-0 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50">
                         {isVerifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         Check Website
                       </Button>

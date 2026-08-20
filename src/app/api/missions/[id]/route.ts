@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne, run } from "@/lib/db";
-import type { Mission, MissionTask, Evaluation } from "@/types";
+import type { Mission, MissionTask, Evaluation, ContentBrief } from "@/types";
 
 export async function GET(
   _req: NextRequest,
@@ -9,10 +9,31 @@ export async function GET(
   const { id } = await params;
   const mission = await queryOne<Mission & { audit_data: string | null }>("SELECT * FROM missions WHERE id = ?", [id]);
   if (!mission) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const tasks = await query<MissionTask>("SELECT * FROM mission_tasks WHERE mission_id = ?", [id]);
+  const tasks = await query<MissionTask>("SELECT * FROM mission_tasks WHERE mission_id = ? ORDER BY priority_score DESC", [id]);
   const evaluation = await queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [mission.evaluation_id]);
+
+  // Load content briefs for tasks that reference them
+  const briefIds = tasks.map((t) => t.content_brief_id).filter(Boolean) as string[];
+  let briefsMap: Record<string, ContentBrief> = {};
+  if (briefIds.length > 0) {
+    const placeholders = briefIds.map(() => "?").join(",");
+    const briefs = await query<ContentBrief>(
+      `SELECT * FROM content_briefs WHERE id IN (${placeholders})`,
+      briefIds
+    );
+    briefsMap = Object.fromEntries(briefs.map((b) => [b.id, b]));
+  }
+
   const auditData = mission.audit_data ? JSON.parse(mission.audit_data) : null;
-  return NextResponse.json({ ...mission, tasks, site_url: evaluation?.digital_asset_url || null, audit_data: auditData });
+  return NextResponse.json({
+    ...mission,
+    tasks: tasks.map((t) => ({
+      ...t,
+      content_brief: t.content_brief_id ? briefsMap[t.content_brief_id] ?? null : null,
+    })),
+    site_url: evaluation?.digital_asset_url || null,
+    audit_data: auditData,
+  });
 }
 
 export async function PUT(

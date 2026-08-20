@@ -83,7 +83,7 @@ export async function POST(
 
       const taskId = generateId();
       await run(
-        "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, 'phase1', ?, 'todo')",
+        "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status, content_brief_id, source, priority_score) VALUES (?, ?, NULL, ?, ?, 'phase1', ?, 'todo', NULL, 'self_audit', 0)",
         [taskId, missionId, taskTitle, description, indicatorCode]
       );
 
@@ -97,6 +97,9 @@ export async function POST(
         indicator_code: indicatorCode,
         status: "todo",
         completed_at: null,
+        content_brief_id: null,
+        source: "self_audit",
+        priority_score: 0,
       });
 
       remainingTitles.add(taskTitle);

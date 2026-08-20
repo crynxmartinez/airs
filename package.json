@@ -11,6 +11,7 @@
     "audit": "node --experimental-strip-types scripts/audit.ts"
   },
   "dependencies": {
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.23.1",
     "apify-client": "^2.24.0",
     "cheerio": "^1.2.0",
@@ -19,6 +20,7 @@
     "crawlee": "^3.17.0",
     "lucide-react": "^1.28.0",
     "next": "16.2.12",
+    "pdfkit": "^0.19.1",
     "pg": "^8.23.0",
     "playwright": "^1.62.1",
     "react": "19.2.4",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne, run, generateId } from "@/lib/db";
-import type { Mission, Finding, Evaluation } from "@/types";
+import type { Mission, Finding, Evaluation, ContentBrief } from "@/types";
 
 const PHASES = [
   { key: "phase1", label: "Foundation & Quick Wins", timeline: "Month 1", description: "Fix technical fundamentals from your site audit. These are quick wins — HTTPS, meta tags, heading structure, page speed, Schema.org. Fast to implement, high impact." },
@@ -26,50 +26,93 @@ export async function POST(req: NextRequest) {
   const evaluation = await queryOne<Evaluation>("SELECT * FROM evaluations WHERE id = ?", [evaluation_id]);
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
 
-  const findings = await query<Finding>(
-    "SELECT * FROM findings WHERE evaluation_id = ? AND (type = 'opportunity' OR type = 'weakness' OR type = 'gap') ORDER BY CASE WHEN impact_level = 'high' THEN 0 WHEN impact_level = 'medium' THEN 1 ELSE 2 END",
-    [evaluation_id]
-  );
-
-  if (findings.length === 0) return NextResponse.json({ error: "No opportunities found to build a mission. Try re-scoring first." }, { status: 400 });
-
-  // Deactivate any existing active missions for this evaluation — only the latest is active
+  // Deactivate existing active missions
   await run("UPDATE missions SET status = 'inactive' WHERE evaluation_id = ? AND status = 'active'", [evaluation_id]);
 
   const missionId = generateId();
   const missionName = `Action Plan: ${evaluation.primary_query}`;
   await run("INSERT INTO missions (id, evaluation_id, name, status) VALUES (?, ?, ?, 'active')", [missionId, evaluation_id, missionName]);
 
-  // Assign findings to phases based on impact level and dimension
-  for (const finding of findings) {
-    // Generate actionable title and get indicator_code for verification
-    const { title, indicatorCode } = actionableTitle(finding);
+  // Track which questions already have tasks (for dedup)
+  const questionsCovered = new Set<string>();
 
-    // Skip findings that can't be auto-verified — every task must have Check Website
-    if (!indicatorCode) continue;
+  // === SOURCE 1: Coverage Gaps (Phase 2) ===
+  const coverageGaps = await query<{ question: string; score: number; answer_type: string; competitor_label: string }>(
+    `SELECT DISTINCT ON (c.question) c.question, c.score, c.answer_type, c.competitor_label
+     FROM coverage c
+     WHERE c.evaluation_id = ?
+       AND c.run_id = (SELECT id FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC LIMIT 1)
+       AND c.score < 40
+     ORDER BY c.question, c.score ASC`,
+    [evaluation_id, evaluation_id]
+  );
 
-    const phase = assignPhase(finding);
+  const briefs = await query<ContentBrief>(
+    "SELECT * FROM content_briefs WHERE evaluation_id = ? ORDER BY weakness_score DESC",
+    [evaluation_id]
+  );
+  const briefsByQuestion = new Map(briefs.map((b) => [b.question, b]));
+
+  for (const gap of coverageGaps) {
+    if (questionsCovered.has(gap.question)) continue;
+    questionsCovered.add(gap.question);
+
+    const brief = briefsByQuestion.get(gap.question);
+    const title = brief
+      ? `Write: ${brief.target_heading || gap.question}`
+      : `Cover: ${gap.question}`;
+
+    const description = brief
+      ? `${brief.rationale}\n\nRequired format: ${brief.required_format || "standard"}\nExtractability: ${brief.extractability_notes || "none"}`
+      : `Coverage gap — score: ${gap.score}/100. Competitor "${gap.competitor_label}" answers this. Your site does not.`;
 
     await run(
-      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo')",
-      [generateId(), missionId, title, finding.description, phase, indicatorCode]
+      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status, content_brief_id, source, priority_score) VALUES (?, ?, NULL, ?, ?, 'phase2', NULL, 'todo', ?, 'coverage_gap', ?)",
+      [generateId(), missionId, title, description, brief?.id ?? null, gap.score]
     );
   }
 
-  // Add strategic task templates — industry best practices that go beyond audit findings
-  // These are deeper, research-backed tasks for Phases 2-4
+  // === SOURCE 2: Content Briefs not already covered (Phase 2) ===
+  for (const brief of briefs) {
+    if (questionsCovered.has(brief.question)) continue;
+    questionsCovered.add(brief.question);
+
+    const title = `Write: ${brief.target_heading || brief.question}`;
+    const description = `${brief.rationale}\n\nRequired format: ${brief.required_format || "standard"}\nExtractability: ${brief.extractability_notes || "none"}\nEffort: ${brief.effort}`;
+
+    await run(
+      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status, content_brief_id, source, priority_score) VALUES (?, ?, NULL, ?, ?, 'phase2', NULL, 'todo', ?, 'content_brief', ?)",
+      [generateId(), missionId, title, description, brief.id, brief.weakness_score]
+    );
+  }
+
+  // === SOURCE 3: Findings (Phase 1-3) ===
+  const findings = await query<Finding>(
+    "SELECT * FROM findings WHERE evaluation_id = ? AND (type = 'opportunity' OR type = 'weakness' OR type = 'gap') ORDER BY CASE WHEN impact_level = 'high' THEN 0 WHEN impact_level = 'medium' THEN 1 ELSE 2 END",
+    [evaluation_id]
+  );
+
+  for (const finding of findings) {
+    const { title, indicatorCode } = actionableTitle(finding);
+    if (!indicatorCode) continue;
+
+    const phase = assignPhase(finding);
+    await run(
+      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status, content_brief_id, source, priority_score) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo', NULL, 'finding', ?)",
+      [generateId(), missionId, title, finding.description, phase, indicatorCode, finding.impact_level === "high" ? 50 : finding.impact_level === "medium" ? 30 : 10]
+    );
+  }
+
+  // === SOURCE 4: Strategic Tasks (Phase 2-4) ===
   const usedIndicators = new Set(
-    findings
-      .map((f) => actionableTitle(f).indicatorCode)
-      .filter(Boolean)
+    findings.map((f) => actionableTitle(f).indicatorCode).filter(Boolean)
   );
 
   for (const template of STRATEGIC_TASKS) {
-    // Skip if we already have a task for this indicator from findings
     if (template.indicator && usedIndicators.has(template.indicator)) continue;
 
     await run(
-      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo')",
+      "INSERT INTO mission_tasks (id, mission_id, recommendation_id, title, description, phase, indicator_code, status, content_brief_id, source, priority_score) VALUES (?, ?, NULL, ?, ?, ?, ?, 'todo', NULL, 'strategic', 0)",
       [generateId(), missionId, template.title, template.description, template.phase, template.indicator || ""]
     );
   }

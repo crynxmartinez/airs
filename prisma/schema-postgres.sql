@@ -105,7 +105,10 @@ CREATE TABLE IF NOT EXISTS mission_tasks (
   phase             TEXT,
   indicator_code    TEXT,
   status            TEXT DEFAULT 'todo',
-  completed_at      TEXT
+  completed_at      TEXT,
+  content_brief_id  TEXT REFERENCES content_briefs(id),
+  source            TEXT DEFAULT 'finding',
+  priority_score    REAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -360,3 +363,18 @@ CREATE TABLE IF NOT EXISTS citation_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_citation_snapshots_project ON citation_snapshots(project_id);
+
+CREATE TABLE IF NOT EXISTS search_citations (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  query           TEXT NOT NULL,
+  engine          TEXT NOT NULL DEFAULT 'google',
+  result_url      TEXT NOT NULL,
+  result_title    TEXT,
+  result_position INTEGER,
+  is_self         INTEGER DEFAULT 0,
+  found_at        TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_search_citations_project ON search_citations(project_id);
+CREATE INDEX IF NOT EXISTS idx_search_citations_query ON search_citations(project_id, query);

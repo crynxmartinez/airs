@@ -104,6 +104,9 @@ export interface MissionTask {
   indicator_code: string | null;
   status: "todo" | "in_progress" | "done";
   completed_at: string | null;
+  content_brief_id: string | null;
+  source: string;
+  priority_score: number;
 }
 
 export interface Report {
@@ -118,4 +121,66 @@ export interface EvaluationWithDetails extends Evaluation {
   evidence_count: number;
   finding_count: number;
   recommendation_count: number;
+}
+
+export interface ContentBrief {
+  id: string;
+  evaluation_id: string;
+  question: string;
+  answer_type: string;
+  weakness_score: number;
+  severity: number;
+  demand: number;
+  winnability: number;
+  effort: string;
+  rationale: string;
+  evidence: string | null;
+  target_heading: string | null;
+  required_format: string | null;
+  extractability_notes: string | null;
+  draft_content: string | null;
+  draft_generated: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface SearchCitation {
+  id: string;
+  project_id: string;
+  query: string;
+  engine: string;
+  result_url: string;
+  result_title: string | null;
+  result_position: number | null;
+  is_self: number;
+  found_at: string;
+}
+
+export interface GeneratedContent {
+  content: string;
+  wordCount: number;
+  style: string;
+  sources: { title: string; url: string }[];
+  selfCitations: number;
+  generatedAt: string;
+}
+
+export interface CitationDashboard {
+  ai: {
+    totalQueries: number;
+    citedQueries: number;
+    citationShare: number;
+    perEngine: { engine: string; total: number; cited: number; share: number }[];
+  };
+  google: {
+    questions: {
+      query: string;
+      cited: number;
+      total: number;
+      pages: { url: string; title: string | null; position: number; isSelf: boolean }[];
+    }[];
+    overallCited: number;
+    overallTotal: number;
+  };
+  history: { date: string; aiShare: number; googleShare: number }[];
 }
