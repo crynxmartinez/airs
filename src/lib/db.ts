@@ -7,6 +7,9 @@ import { join } from "path";
  *
  * Uses DATABASE_URL env var to connect (Prisma Postgres or any Postgres instance).
  * Exposes query/queryOne/run/generateId — the same exports every route already uses.
+ *
+ * SQLite-style ? placeholders are converted to $1, $2, ... at runtime so
+ * every existing call site works without modification.
  */
 
 let pool: Pool | null = null;
@@ -28,19 +31,59 @@ function getPool(): Pool {
   return pool;
 }
 
-let initialized = false;
+/**
+ * Converts SQLite-style ? placeholders to Postgres $1, $2, ... syntax.
+ * Tracks single-quoted strings to avoid replacing ? inside SQL string literals.
+ */
+function convertPlaceholders(sql: string): string {
+  let result = "";
+  let paramNum = 1;
+  let inString = false;
 
-async function ensureSchema() {
-  if (initialized) return;
-  initialized = true;
-  const schemaPath = join(process.cwd(), "prisma", "schema-postgres.sql");
-  const schema = readFileSync(schemaPath, "utf-8");
-  const client = await getPool().connect();
-  try {
-    await client.query(schema);
-  } finally {
-    client.release();
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+
+    if (inString) {
+      result += char;
+      if (char === "'") {
+        if (sql[i + 1] === "'") {
+          result += sql[i + 1];
+          i++;
+        } else {
+          inString = false;
+        }
+      }
+    } else {
+      if (char === "'") {
+        inString = true;
+        result += char;
+      } else if (char === "?") {
+        result += `$${paramNum}`;
+        paramNum++;
+      } else {
+        result += char;
+      }
+    }
   }
+
+  return result;
+}
+
+let schemaPromise: Promise<void> | null = null;
+
+function ensureSchema(): Promise<void> {
+  if (schemaPromise) return schemaPromise;
+  schemaPromise = (async () => {
+    const schemaPath = join(process.cwd(), "prisma", "schema-postgres.sql");
+    const schema = readFileSync(schemaPath, "utf-8");
+    const client = await getPool().connect();
+    try {
+      await client.query(schema);
+    } finally {
+      client.release();
+    }
+  })();
+  return schemaPromise;
 }
 
 export function generateId(): string {
@@ -60,19 +103,19 @@ function bindable(value: unknown): unknown {
 
 export async function query<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   await ensureSchema();
-  const result = await getPool().query(sql, params.map(bindable));
+  const result = await getPool().query(convertPlaceholders(sql), params.map(bindable));
   return result.rows as T[];
 }
 
 export async function queryOne<T = unknown>(sql: string, params: unknown[] = []): Promise<T | undefined> {
   await ensureSchema();
-  const result = await getPool().query(sql, params.map(bindable));
+  const result = await getPool().query(convertPlaceholders(sql), params.map(bindable));
   return (result.rows[0] as T | undefined) ?? undefined;
 }
 
 export async function run(sql: string, params: unknown[] = []): Promise<{ changes: number; lastInsertRowid: number | bigint }> {
   await ensureSchema();
-  const result = await getPool().query(sql, params.map(bindable));
+  const result = await getPool().query(convertPlaceholders(sql), params.map(bindable));
   return {
     changes: result.rowCount ?? 0,
     lastInsertRowid: 0,

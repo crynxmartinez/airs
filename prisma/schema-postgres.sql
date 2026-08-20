@@ -224,6 +224,17 @@ CREATE TABLE IF NOT EXISTS gmb_businesses (
 CREATE INDEX IF NOT EXISTS idx_gmb_audits_project ON gmb_audits(project_id);
 CREATE INDEX IF NOT EXISTS idx_gmb_businesses_audit ON gmb_businesses(gmb_audit_id);
 
+CREATE TABLE IF NOT EXISTS coverage_runs (
+  id             TEXT PRIMARY KEY,
+  evaluation_id  TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
+  ran_at         TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+  questions      INTEGER DEFAULT 0,
+  sites          INTEGER DEFAULT 0,
+  engine_version TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_coverage_runs_eval ON coverage_runs(evaluation_id, ran_at);
+
 CREATE TABLE IF NOT EXISTS coverage (
   id              TEXT PRIMARY KEY,
   evaluation_id   TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
@@ -250,17 +261,6 @@ CREATE INDEX IF NOT EXISTS idx_coverage_eval ON coverage(evaluation_id);
 CREATE INDEX IF NOT EXISTS idx_coverage_comp ON coverage(competitor_id);
 CREATE INDEX IF NOT EXISTS idx_coverage_run ON coverage(run_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_coverage_run_comp_q ON coverage(run_id, competitor_id, question);
-
-CREATE TABLE IF NOT EXISTS coverage_runs (
-  id             TEXT PRIMARY KEY,
-  evaluation_id  TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
-  ran_at         TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
-  questions      INTEGER DEFAULT 0,
-  sites          INTEGER DEFAULT 0,
-  engine_version TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_coverage_runs_eval ON coverage_runs(evaluation_id, ran_at);
 
 CREATE TABLE IF NOT EXISTS content_briefs (
   id              TEXT PRIMARY KEY,

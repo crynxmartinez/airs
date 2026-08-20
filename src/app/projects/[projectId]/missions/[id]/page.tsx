@@ -88,9 +88,7 @@ export default function MissionDetailPage() {
       });
       setMission({ ...mission, name: nameValue.trim() });
       setEditingName(false);
-    } catch {
-      // ignore
-    }
+    } catch (err) { console.error("[page.tsx]", err); }
     setSavingName(false);
   }
 

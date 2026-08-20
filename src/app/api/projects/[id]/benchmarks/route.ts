@@ -39,7 +39,7 @@ export async function GET(
         if (!dimTrends[d.code]) dimTrends[d.code] = [];
         dimTrends[d.code].push({ date, score: d.score });
       }
-    } catch {}
+    } catch (err) { console.error("[route.ts]", err); }
   }
 
   // Mission progress — for each evaluation with a mission, get completion %

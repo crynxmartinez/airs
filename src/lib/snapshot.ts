@@ -38,14 +38,14 @@ export async function recordScoreSnapshot(projectId: string, evaluationId: strin
     }
     const result = await calculateGeoScore(evaluationId, robotsData);
     geoScore = result.score;
-  } catch {}
+  } catch (err) { console.error("[snapshot.ts]", err); }
 
   // GMB website readiness
   let gmbScore: number | null = null;
   try {
     const result = await calculateGmbScore(evaluationId);
     gmbScore = result.score;
-  } catch {}
+  } catch (err) { console.error("[snapshot.ts]", err); }
 
   // GMB LPS from latest audit
   const gmbAudit = (await query<{ lps_score: number }>(

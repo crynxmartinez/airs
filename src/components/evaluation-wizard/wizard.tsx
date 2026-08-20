@@ -199,9 +199,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
           body: JSON.stringify({ questions: [selectedQuestion] }),
         });
         setStep(1);
-      } catch {
-        // ignore
-      }
+      } catch (err) { console.error("[wizard.tsx]", err); }
       setSaving(false);
     } else if (step === 1) {
       // Save selected competitors

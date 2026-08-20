@@ -53,9 +53,7 @@ export default function GmbActionPlansPage() {
             }
           }
         }
-      } catch {
-        // no data yet
-      }
+      } catch (err) { console.error("[page.tsx]", err); }
       if (active) setLoading(false);
     })();
     return () => { active = false; };

@@ -69,9 +69,7 @@ export async function GET() {
       try {
         const geoResult = await calculateGeoScore(evals[0].id);
         geoScore = geoResult.score;
-      } catch {
-        // no evidence yet
-      }
+      } catch (err) { console.error("[route.ts]", err); }
     }
 
     // Get GMB website readiness score from latest evaluation
@@ -80,9 +78,7 @@ export async function GET() {
       try {
         const gmbResult = await calculateGmbScore(evals[0].id);
         gmbScore = gmbResult.score;
-      } catch {
-        // no evidence yet
-      }
+      } catch (err) { console.error("[route.ts]", err); }
     }
 
     // Get latest GMB audit LPS score

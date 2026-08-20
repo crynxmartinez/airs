@@ -81,7 +81,7 @@ export async function POST(
         for (const text of subIntentsFromHeadings(JSON.parse(row.headings || "[]"), topic)) {
           fromHeadings.add(text.toLowerCase());
         }
-      } catch {}
+      } catch (err) { console.error("[route.ts]", err); }
     }
 
     // Topic-relevant is not the same as worth briefing. Two filters, both reported rather

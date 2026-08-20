@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       const u = new URL(fullUrl);
       hostname = u.hostname.replace("www.", "");
       domain = hostname.split(".")[0];
-    } catch {}
+    } catch (err) { console.error("[route.ts]", err); }
 
     // Extract location from page content
     const locationPatterns = [

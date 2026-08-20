@@ -224,7 +224,7 @@ export default function GmbProfileAuditPage() {
           const proj = await projRes.json();
           if (proj.target_location) setLocation(proj.target_location);
         }
-      } catch {}
+      } catch (err) { console.error("[page.tsx]", err); }
       // Check if a previous GMB scrape audit exists
       try {
         const auditRes = await fetch(`/api/projects/${projectId}/gmb/audits`);
@@ -234,7 +234,7 @@ export default function GmbProfileAuditPage() {
             setHasScanned(true);
           }
         }
-      } catch {}
+      } catch (err) { console.error("[page.tsx]", err); }
       // Also load AIRS-derived GMB readiness (secondary data)
       await loadGmb();
       if (active) setLoading(false);

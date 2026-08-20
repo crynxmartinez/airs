@@ -35,9 +35,7 @@ export default function GmbRankTrackingPage() {
           const json = await res.json();
           setAudits(json);
         }
-      } catch {
-        // no data
-      }
+      } catch (err) { console.error("[page.tsx]", err); }
       if (active) setLoading(false);
     })();
     return () => { active = false; };

@@ -81,9 +81,7 @@ export default function ProjectMissionsPage() {
             : g
         )
       );
-    } catch {
-      // ignore
-    }
+    } catch (err) { console.error("[page.tsx]", err); }
     setActivatingId(null);
   }
 

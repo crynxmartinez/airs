@@ -25,9 +25,7 @@ export default function NewProjectPage() {
       if (data.id) {
         router.push(`/projects/${data.id}`);
       }
-    } catch {
-      // ignore
-    }
+    } catch (err) { console.error("[page.tsx]", err); }
     setSaving(false);
   }
 

@@ -84,7 +84,7 @@ export async function GET(
       for (const s of JSON.parse(p.sections ?? "[]") as { heading: string; text: string }[]) {
         passages.push({ heading: s.heading, text: s.text });
       }
-    } catch {}
+    } catch (err) { console.error("[route.ts]", err); }
     entry.documents.push({ url: p.url, title: p.title, passages });
 
     const date = p.modified_at ?? p.published_at;

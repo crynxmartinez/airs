@@ -168,7 +168,7 @@ function discoverPages(html: string, baseUrl: string, rules: RobotsRules): strin
           break;
         }
       }
-    } catch {}
+    } catch (err) { console.error("[crawler.ts]", err); }
   });
 
   const priorityOrder = ["About", "Services", "Contact", "FAQ", "Pricing"];
