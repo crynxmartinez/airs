@@ -1,6 +1,6 @@
 import { searchTavily, type TavilyResult } from "@/lib/tavily";
 import { query, queryOne, run } from "@/lib/db";
-import type { GeneratedContent, ContentBrief, Evaluation } from "@/types";
+import type { GeneratedContent, ContentBrief, Evaluation, MissionTask } from "@/types";
 import { generatePdf } from "@/lib/pdf-generator";
 
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
@@ -90,13 +90,94 @@ function selectStyle(answerType: string): "case_study" | "comparison" {
   return "case_study";
 }
 
+function buildTaskBlock(taskContext: TaskContext | null): string {
+  if (!taskContext) return "";
+
+  const { task, yourScore, gapEvidence } = taskContext;
+  const lines: string[] = [];
+
+  lines.push("MISSION TASK — WHAT THIS CONTENT MUST ADDRESS:");
+  lines.push(`- Task: ${task.title}`);
+  if (task.description) {
+    lines.push(`- Task description: ${task.description}`);
+  }
+  lines.push(`- Task source: ${task.source.replace(/_/g, " ")}`);
+  lines.push(`- Priority score: ${task.priority_score}`);
+
+  if (yourScore > 0) {
+    lines.push(`- Your site's current coverage score for this question: ${yourScore}/100`);
+  }
+
+  if (gapEvidence) {
+    lines.push(`- Gap evidence: ${gapEvidence}`);
+  }
+
+  lines.push("");
+  lines.push("This content must directly fill the gap identified above. The article should answer the question");
+  lines.push("more thoroughly than competitors currently do, using the competitor passages below as a benchmark");
+  lines.push("for what already exists — your content must be better, more specific, more data-driven.");
+
+  return lines.join("\n");
+}
+
+function buildCoverageBlock(
+  coverageData: { score: number; competitorCount: number; totalCompetitors: number } | null,
+  taskContext: TaskContext | null
+): string {
+  if (!coverageData && !taskContext) return "No coverage data available.";
+
+  const lines: string[] = [];
+
+  if (coverageData) {
+    lines.push("COVERAGE GAP ANALYSIS:");
+    lines.push(`- Your site's coverage score: ${coverageData.score}/100`);
+    lines.push(`- ${coverageData.competitorCount} of ${coverageData.totalCompetitors} competitors already answer this question`);
+    lines.push("- Your site does NOT adequately answer this question — this is the gap to fill");
+  }
+
+  if (taskContext && taskContext.coverageGaps.length > 0) {
+    lines.push("");
+    lines.push("COMPETITOR COVERAGE — what competitors already say (your content must be better than this):");
+    for (const gap of taskContext.coverageGaps) {
+      lines.push("");
+      lines.push(`  ${gap.competitorLabel} (score: ${gap.score}/100, level: ${gap.level}):`);
+      if (gap.heading) lines.push(`    Heading used: "${gap.heading}"`);
+      if (gap.passage) lines.push(`    Passage: "${gap.passage.substring(0, 300)}"`);
+      if (gap.sourceUrl) lines.push(`    Source: ${gap.sourceUrl}`);
+      lines.push(`    Term coverage: ${Math.round(gap.termCoverage * 100)}%, Specificity: ${Math.round(gap.specificity * 100)}%`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+interface CoverageGapDetail {
+  competitorLabel: string;
+  score: number;
+  level: string;
+  passage: string | null;
+  heading: string | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  termCoverage: number;
+  specificity: number;
+}
+
+interface TaskContext {
+  task: MissionTask;
+  coverageGaps: CoverageGapDetail[];
+  yourScore: number;
+  gapEvidence: string | null;
+}
+
 function buildPrompt(
   question: string,
   style: "case_study" | "comparison",
   research: ResearchData,
   brief: ContentBrief,
   evaluation: Evaluation,
-  coverageData: { score: number; competitorCount: number; totalCompetitors: number } | null
+  coverageData: { score: number; competitorCount: number; totalCompetitors: number } | null,
+  taskContext: TaskContext | null
 ): string {
   const businessName = evaluation.digital_asset_url
     ? evaluation.digital_asset_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")
@@ -118,9 +199,7 @@ function buildPrompt(
     ? `Competitor intelligence:\n${brief.evidence}`
     : "No specific competitor data available.";
 
-  const coverageBlock = coverageData
-    ? `Coverage gap analysis:\n- Current score: ${coverageData.score}/100\n- ${coverageData.competitorCount} of ${coverageData.totalCompetitors} competitors answer this question\n- Your site does not adequately answer this question`
-    : "No coverage data available.";
+  const coverageBlock = buildCoverageBlock(coverageData, taskContext);
 
   const baseRequirements = `
 CONTENT REQUIREMENTS:
@@ -142,6 +221,8 @@ FORMAT SPECIFICATIONS:
 - Target heading: ${brief.target_heading || question}
 `;
 
+  const taskBlock = buildTaskBlock(taskContext);
+
   if (style === "case_study") {
     return `You are an expert content writer and researcher. Write a 2000-3500 word case study article about: "${question}"
 
@@ -150,6 +231,8 @@ BUSINESS CONTEXT:
 - Industry: ${evaluation.primary_query}
 - Location: ${location || "not specified"}
 - Target audience: ${audience}
+
+${taskBlock}
 
 RESEARCH DATA (from live web search — use these real sources):
 ${researchBlock}
@@ -185,6 +268,8 @@ BUSINESS CONTEXT:
 - Industry: ${evaluation.primary_query}
 - Location: ${location || "not specified"}
 - Target audience: ${audience}
+
+${taskBlock}
 
 RESEARCH DATA (from live web search — use these real sources):
 ${researchBlock}
@@ -323,13 +408,48 @@ export async function generateContent(
       }
     : null;
 
+  // Load the mission task for this brief
+  const task = await queryOne<MissionTask>(
+    "SELECT * FROM mission_tasks WHERE content_brief_id = ? ORDER BY priority_score DESC LIMIT 1",
+    [briefId]
+  );
+
+  // Load detailed coverage gap data — what competitors say about this question
+  const coverageGaps = await query<CoverageGapDetail>(
+    `SELECT c.competitor_label, c.score, c.level, c.passage, c.heading,
+            c.source_url, c.source_title, c.term_coverage, c.specificity
+     FROM coverage c
+     WHERE c.evaluation_id = ? AND c.question = ?
+       AND c.run_id = (SELECT id FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC LIMIT 1)
+     ORDER BY c.score DESC LIMIT 5`,
+    [evaluationId, brief.question, evaluationId]
+  );
+
+  // Get the user's own coverage score for this question (if it exists)
+  const yourCoverage = await queryOne<{ score: number }>(
+    `SELECT c.score FROM coverage c
+     WHERE c.evaluation_id = ? AND c.question = ?
+       AND c.competitor_label = 'Your Site'
+     ORDER BY c.score DESC LIMIT 1`,
+    [evaluationId, brief.question]
+  );
+
+  const taskContext: TaskContext | null = task
+    ? {
+        task,
+        coverageGaps,
+        yourScore: yourCoverage?.score ?? coverage?.score ?? 0,
+        gapEvidence: brief.evidence,
+      }
+    : null;
+
   const question = brief.question;
   const location = evaluation.target_location || undefined;
 
   const research = await researchTopic(question, location);
 
   const style = selectStyle(brief.answer_type);
-  const prompt = buildPrompt(question, style, research, brief, evaluation, coverage);
+  const prompt = buildPrompt(question, style, research, brief, evaluation, coverage, taskContext);
 
   const content = await callClaude(prompt);
 
