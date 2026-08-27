@@ -113,7 +113,12 @@ export function isLongTailNoise(question: string): boolean {
 }
 
 /** Builds the seed variants to send upstream. Autocomplete only completes forward,
- *  so prefix variants are how question-shaped queries get surfaced at all. */
+ *  so prefix variants are how question-shaped queries get surfaced at all.
+ *
+ *  When the topic includes a location (e.g. "custom home builder sydney"), the
+ *  question-prefixed seeds often return nothing because the long-tail is too
+ *  specific. We also seed with a location-stripped version ("custom home builder")
+ *  to surface the question-shaped queries that do have volume. */
 export function buildSeeds(topic: string): string[] {
   const base = topic.trim().toLowerCase();
   if (!base) return [];
@@ -121,7 +126,28 @@ export function buildSeeds(topic: string): string[] {
   const seeds = new Set<string>([base]);
   for (const prefix of QUESTION_PREFIXES) seeds.add(`${prefix} ${base}`);
   for (const suffix of QUESTION_SUFFIXES) seeds.add(`${base} ${suffix}`);
+
+  // Also seed with a location-stripped version for broader autocomplete coverage
+  const stripped = stripLocation(base);
+  if (stripped && stripped !== base) {
+    seeds.add(stripped);
+    for (const prefix of QUESTION_PREFIXES) seeds.add(`${prefix} ${stripped}`);
+    for (const suffix of QUESTION_SUFFIXES) seeds.add(`${stripped} ${suffix}`);
+  }
+
   return Array.from(seeds);
+}
+
+/** Common location words to strip from topics for broader seed generation. */
+const LOCATION_PATTERN = /\b(sydney|melbourne|brisbane|perth|adelaide|auckland|wellington|london|manchester|birmingham|glasgow|dublin|toronto|vancouver|montreal|ottawa|calgary|edmonton|new york|los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|jacksonville|fort worth|columbus|charlotte|san francisco|indianapolis|seattle|denver|boston|el paso|nashville|detroit|oklahoma city|portland|las vegas|memphis|louisville|baltimore|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|mesa|atlanta|omaha|colorado springs|raleigh|miami|long beach|virginia beach|oakland|minneapolis|tulsa|arlington|tampa|new orleans|wichita|cleveland|bakersfield|aurora|anaheim|honolulu|santa ana|riverside|corpus christi|lexington|stockton|st louis|saint louis|pittsburgh|saint paul|paul|anchorage|cincinnati|henderson|greensboro|plano|newark|toledo|lincoln|orlando|chula vista|jersey city|irvine|fort wayne|frisco|chandler|reno|north las vegas|winston salem|gilbert|glendale|reno|norfolk|madison|boise|spokane|belfast|cardiff|edinburgh|aberdeen|newcastle|sheffield|leeds|bristol|nottingham|leicester|coventry|hull|plymouth|brighton|reading|oxford|cambridge|manila|cebu|davao|quezon|mumbai|delhi|bangalore|chennai|hyderabad|kolkata|pune|ahmedabad|jaipur|surat|singapore|hong kong|tokyo|osaka|seoul|busan|bangkok|kuala lumpur|jakarta|manila|melbourne|geelong|ballarat|bendigo|gold coast|sunshine coast|wollongong|newcastle|central coast|townsville|cairns|toowoomba|darwin|hobart|launceston)\b/gi;
+
+function stripLocation(topic: string): string {
+  const stripped = topic.replace(LOCATION_PATTERN, "").replace(/\s+/g, " ").trim();
+  // Only use the stripped version if it's still meaningful (at least 2 words)
+  if (stripped.split(/\s+/).filter(Boolean).length >= 2) {
+    return stripped;
+  }
+  return "";
 }
 
 async function fetchJson(url: string): Promise<unknown | null> {
@@ -168,13 +194,17 @@ export async function discoverDemand(topic: string, opts: DemandOptions = {}): P
   const delayMs = opts.delayMs ?? 250;
   const byQuestion = new Map<string, Suggestion>();
 
+  // Also compute the location-stripped topic for broader relevance matching
+  const strippedTopic = stripLocation(topic.trim().toLowerCase());
+
   const add = (question: string, source: Suggestion["source"], seed: string) => {
     const clean = question.replace(/\s+/g, " ").trim().toLowerCase();
     // Drop echoes of the seed itself and anything too short to be a real query.
     if (clean.length < 8) return;
     // Autocomplete drifts: seeding "custom web app" returned "custom wallpaper cost"
     // and "what is it worth app" — a shared modifier is not shared topic.
-    if (!isTopicRelevant(clean, topic)) return;
+    // Check relevance against both the full topic and the stripped topic.
+    if (!isTopicRelevant(clean, topic) && !(strippedTopic && isTopicRelevant(clean, strippedTopic))) return;
     if (isLongTailNoise(clean)) return;
     if (byQuestion.has(clean)) return;
     byQuestion.set(clean, { question: clean, source, seed, isQuestion: isQuestionLike(clean) });
