@@ -82,7 +82,10 @@ function ensureSchema(): Promise<void> {
     } finally {
       client.release();
     }
-  })();
+  })().catch((err) => {
+    schemaPromise = null;
+    throw err;
+  });
   return schemaPromise;
 }
 

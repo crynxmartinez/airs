@@ -96,6 +96,29 @@ CREATE TABLE IF NOT EXISTS missions (
   completed_at  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS content_briefs (
+  id              TEXT PRIMARY KEY,
+  evaluation_id   TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
+  question        TEXT NOT NULL,
+  answer_type     TEXT NOT NULL,
+  weakness_score  INTEGER DEFAULT 0,
+  severity        REAL DEFAULT 0,
+  demand          REAL DEFAULT 0,
+  winnability     REAL DEFAULT 0,
+  effort          TEXT,
+  rationale       TEXT,
+  evidence        TEXT,
+  target_heading  TEXT,
+  required_format TEXT,
+  extractability_notes TEXT,
+  draft_content   TEXT,
+  draft_generated TEXT,
+  status          TEXT DEFAULT 'pending',
+  created_at      TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_briefs_eval ON content_briefs(evaluation_id);
+
 CREATE TABLE IF NOT EXISTS mission_tasks (
   id                TEXT PRIMARY KEY,
   mission_id        TEXT REFERENCES missions(id) ON DELETE CASCADE,
@@ -264,29 +287,6 @@ CREATE INDEX IF NOT EXISTS idx_coverage_eval ON coverage(evaluation_id);
 CREATE INDEX IF NOT EXISTS idx_coverage_comp ON coverage(competitor_id);
 CREATE INDEX IF NOT EXISTS idx_coverage_run ON coverage(run_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_coverage_run_comp_q ON coverage(run_id, competitor_id, question);
-
-CREATE TABLE IF NOT EXISTS content_briefs (
-  id              TEXT PRIMARY KEY,
-  evaluation_id   TEXT REFERENCES evaluations(id) ON DELETE CASCADE,
-  question        TEXT NOT NULL,
-  answer_type     TEXT NOT NULL,
-  weakness_score  INTEGER DEFAULT 0,
-  severity        REAL DEFAULT 0,
-  demand          REAL DEFAULT 0,
-  winnability     REAL DEFAULT 0,
-  effort          TEXT,
-  rationale       TEXT,
-  evidence        TEXT,
-  target_heading  TEXT,
-  required_format TEXT,
-  extractability_notes TEXT,
-  draft_content   TEXT,
-  draft_generated TEXT,
-  status          TEXT DEFAULT 'pending',
-  created_at      TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_briefs_eval ON content_briefs(evaluation_id);
 
 CREATE TABLE IF NOT EXISTS ai_queries (
   id              TEXT PRIMARY KEY,

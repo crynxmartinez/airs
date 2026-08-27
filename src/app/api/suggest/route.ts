@@ -147,20 +147,67 @@ export async function POST(req: NextRequest) {
 function deriveTopic(title: string, h1: string, metaDesc: string): string {
   const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 
+  // Strip common noise patterns from titles (app store badges, social icons, etc.)
+  const stripNoise = (s: string) =>
+    s
+      .replace(/download.{0,5}on.{0,5}the.{0,5}app.{0,5}store[^|]*/gi, "")
+      .replace(/(youtube|facebook|pinterest|instagram|linkedin|twitter|tiktok)\s*(icon|badge|logo)?/gi, "")
+      .replace(/\b(RGB|SVG|PNG|JPG)\b[^|]*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const candidates: string[] = [];
-  if (h1) candidates.push(clean(h1));
+
+  // h1 is the best signal — but extract the service part, not the tagline
+  if (h1) {
+    const cleanedH1 = clean(stripNoise(h1));
+    // If h1 is a tagline like "The Plumbing Experts You've Trusted for Over 90 Years",
+    // try to extract the core noun phrase
+    const serviceMatch = cleanedH1.match(/\b([a-z]+(?:\s+[a-z]+)?)\s+(services?|experts?|company|contractors?|repair|cleaning|installation)\b/i);
+    if (serviceMatch) {
+      candidates.push(clean(serviceMatch[0]));
+    }
+    candidates.push(cleanedH1);
+  }
+
   if (title) {
-    const segments = title.split(/[|\-–—:]/).map(clean).filter(Boolean);
+    const cleanedTitle = clean(stripNoise(title));
+    const segments = cleanedTitle.split(/[|\-–—:•·]/).map(clean).filter(Boolean);
     // The longer segment tends to be the descriptive one; the shorter is the brand.
     candidates.push(...segments.sort((a, b) => b.length - a.length));
   }
-  if (metaDesc) candidates.push(clean(metaDesc).split(/[.!?]/)[0]);
 
+  // Meta description first sentence is often the most concise description
+  if (metaDesc) {
+    const firstSentence = clean(metaDesc.split(/[.!?]/)[0]);
+    // Try to extract a service phrase from meta description
+    const metaServiceMatch = firstSentence.match(/\b([a-z]+(?:\s+[a-z]+)?)\s+(services?|company|contractors?|repair|cleaning|installation|solutions?)\b/i);
+    if (metaServiceMatch) {
+      candidates.push(clean(metaServiceMatch[0]));
+    }
+    candidates.push(firstSentence);
+  }
+
+  // Try each candidate, relaxing constraints
   for (const c of candidates) {
-    const words = c.split(/\s+/);
+    const words = c.split(/\s+/).filter(Boolean);
+    // First pass: 2-8 words, reasonable length
     if (words.length >= 2 && words.length <= 8 && c.length >= 8 && c.length <= 80) {
       return c.toLowerCase();
     }
   }
+
+  // Second pass: if nothing fit, try extracting the first few meaningful words
+  for (const c of candidates) {
+    const words = c.split(/\s+/).filter((w) => w.length > 2);
+    if (words.length >= 2) {
+      // Take first 2-5 meaningful words
+      const shortTopic = words.slice(0, Math.min(5, words.length)).join(" ");
+      if (shortTopic.length >= 8 && shortTopic.length <= 60) {
+        return shortTopic.toLowerCase();
+      }
+    }
+  }
+
   return "";
 }
