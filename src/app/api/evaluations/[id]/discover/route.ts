@@ -125,42 +125,67 @@ export async function POST(
     }
   }
 
-  // --- Match: only hosts in BOTH sets ---
-  const matched: { host: string; url: string; title: string; description: string; competitor_type: string }[] = [];
-  for (const [host, tavilyEntry] of tavilyByHost) {
-    if (!claudeByHost.has(host)) continue;
-    const type = classifyCompetitor(tavilyEntry.url, tavilyEntry.title, tavilyEntry.content);
-    if (type !== "direct") continue;
-    matched.push({
+  // --- Classify each host into: primary (both), googleOnly, or aiOnly ---
+  const makeEntry = (host: string, url: string, title: string, content: string, discoveredVia: string) => {
+    const type = classifyCompetitor(url, title, content);
+    return {
       host,
-      url: tavilyEntry.url,
-      title: tavilyEntry.title,
-      description: tavilyEntry.content.slice(0, 200),
+      url,
+      title,
+      description: content.slice(0, 200),
       competitor_type: type,
-    });
-    if (matched.length >= MAX_MATCHED) break;
+      discovered_via: discoveredVia,
+    };
+  };
+
+  const primary: { host: string; url: string; title: string; description: string; competitor_type: string; discovered_via: string }[] = [];
+  const googleOnly: { host: string; url: string; title: string; description: string; competitor_type: string; discovered_via: string }[] = [];
+  const aiOnly: { host: string; url: string; title: string; description: string; competitor_type: string; discovered_via: string }[] = [];
+
+  for (const [host, tav] of tavilyByHost) {
+    if (claudeByHost.has(host)) {
+      primary.push(makeEntry(host, tav.url, tav.title, tav.content, "both"));
+    } else {
+      googleOnly.push(makeEntry(host, tav.url, tav.title, tav.content, "google"));
+    }
   }
 
-  if (matched.length === 0) {
+  for (const [host, ai] of claudeByHost) {
+    if (!tavilyByHost.has(host)) {
+      aiOnly.push(makeEntry(host, ai.url, ai.title, "", "ai"));
+    }
+  }
+
+  // Sort primary first, then googleOnly by relevance, then aiOnly
+  // Limit each bucket
+  const primaryLimited = primary.slice(0, MAX_MATCHED);
+  const googleOnlyLimited = googleOnly.slice(0, MAX_MATCHED);
+  const aiOnlyLimited = aiOnly.slice(0, MAX_MATCHED);
+
+  // Filter to direct competitors for primary, but keep all for googleOnly/aiOnly
+  const primaryDirect = primaryLimited.filter((m) => m.competitor_type === "direct");
+
+  if (primaryDirect.length === 0 && googleOnlyLimited.length === 0 && aiOnlyLimited.length === 0) {
     return NextResponse.json(
-      { error: "No competitors found in both Google and AI results. Try adding URLs manually.", reason: "no_match" },
+      { error: "No competitors found in Google or AI results. Try adding URLs manually.", reason: "no_match" },
       { status: 404 }
     );
   }
 
-  // --- Register matched competitors ---
+  // --- Register all competitors (primary + google-only + ai-only) ---
   const known = new Set(
     (await query<{ url: string }>("SELECT url FROM competitors WHERE evaluation_id = ?", [id])).map((r) =>
       hostOf(r.url)
     )
   );
 
-  const registered = matched.filter((m) => !known.has(m.host));
+  const allResults = [...primaryDirect, ...googleOnlyLimited, ...aiOnlyLimited];
+  const registered = allResults.filter((m) => !known.has(m.host));
   for (const m of registered) {
     await run(
       `INSERT INTO competitors (id, evaluation_id, url, competitor_name, competitor_type, discovered_via)
-       VALUES (?, ?, ?, ?, ?, 'google_ai_match')`,
-      [generateId(), id, m.url, m.host, m.competitor_type]
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [generateId(), id, m.url, m.host, m.competitor_type, m.discovered_via]
     );
   }
 
@@ -168,17 +193,34 @@ export async function POST(
     questions: effectiveQuestions,
     keywords: effectiveKeywords,
     market: market || null,
-    discovered_via: "google_ai_match",
     estimated_cost_usd: totalEstimatedCost,
-    google_results: tavilyByHost.size,
-    ai_results: claudeByHost.size,
-    matched: matched.length,
-    already_known: matched.length - registered.length,
-    results: matched.map((m) => ({
+    stats: {
+      googleResults: tavilyByHost.size,
+      aiResults: claudeByHost.size,
+      matched: primaryDirect.length,
+      googleOnly: googleOnlyLimited.length,
+      aiOnly: aiOnlyLimited.length,
+    },
+    primary: primaryDirect.map((m) => ({
       url: m.url,
       title: m.title,
       description: m.description,
       competitor_type: m.competitor_type,
+      discovered_via: m.discovered_via,
+    })),
+    googleOnly: googleOnlyLimited.map((m) => ({
+      url: m.url,
+      title: m.title,
+      description: m.description,
+      competitor_type: m.competitor_type,
+      discovered_via: m.discovered_via,
+    })),
+    aiOnly: aiOnlyLimited.map((m) => ({
+      url: m.url,
+      title: m.title,
+      description: m.description,
+      competitor_type: m.competitor_type,
+      discovered_via: m.discovered_via,
     })),
   });
 }

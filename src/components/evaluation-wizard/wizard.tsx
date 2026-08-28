@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Trash2, Loader2, ChevronRight, ChevronLeft, Check, Globe, ScanLine, Sparkles, Lightbulb } from "lucide-react";
+import { Search, Plus, Trash2, Loader2, ChevronRight, ChevronLeft, ChevronDown, Check, Globe, ScanLine, Sparkles, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ interface Competitor {
   scraping: boolean;
   pagesCrawled?: number;
   jsRendered?: boolean;
+  discovered_via?: string;
 }
 
 interface QuestionSuggestion {
@@ -27,6 +29,102 @@ interface QuestionSuggestion {
 interface KeywordSuggestion {
   keyword: string;
   source: string;
+}
+
+function CompetitorGroup({
+  title,
+  description,
+  badgeClass,
+  badgeText,
+  comps,
+  competitors,
+  setCompetitors,
+  hideHeader,
+}: {
+  title: string;
+  description: string;
+  badgeClass: string;
+  badgeText: string;
+  comps: Competitor[];
+  competitors: Competitor[];
+  setCompetitors: Dispatch<SetStateAction<Competitor[]>>;
+  hideHeader?: boolean;
+}) {
+  if (comps.length === 0) return null;
+
+  const toggleAll = (checked: boolean) => {
+    const urls = new Set(comps.map((c) => c.url));
+    setCompetitors((prev) => prev.map((c) => (urls.has(c.url) ? { ...c, selected: checked } : c)));
+  };
+
+  const allSelected = comps.every((c) => c.selected);
+
+  return (
+    <div className="space-y-2">
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-700">{title}</h4>
+            {description && <span className="text-xs text-slate-400">— {description}</span>}
+          </div>
+          <button
+            onClick={() => toggleAll(!allSelected)}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700"
+          >
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        </div>
+      )}
+      {comps.map((comp) => {
+        const globalIdx = competitors.findIndex((c) => c.url === comp.url);
+        return (
+          <div
+            key={comp.url}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border p-3 transition-colors",
+              comp.selected ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={comp.selected}
+              onChange={() =>
+                setCompetitors((prev) =>
+                  prev.map((c, idx) => (idx === globalIdx ? { ...c, selected: !c.selected } : c))
+                )
+              }
+              className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="truncate text-sm font-medium text-slate-800">
+                  {comp.competitor_name}
+                </span>
+                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium", badgeClass)}>
+                  {badgeText}
+                </span>
+              </div>
+              {comp.title && (
+                <p className="mt-0.5 truncate text-xs text-slate-500">{comp.title}</p>
+              )}
+              {comp.description && (
+                <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">{comp.description}</p>
+              )}
+            </div>
+            <button
+              onClick={() =>
+                setCompetitors((prev) => prev.filter((_, idx) => idx !== globalIdx))
+              }
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function EvaluationWizard({ projectId }: { projectId: string }) {
@@ -55,6 +153,9 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchProgress, setSearchProgress] = useState<{ done: number; total: number } | null>(null);
+  const [searchStats, setSearchStats] = useState<{ googleResults: number; aiResults: number; matched: number; googleOnly: number; aiOnly: number } | null>(null);
+  const [showGoogleOnly, setShowGoogleOnly] = useState(false);
+  const [showAiOnly, setShowAiOnly] = useState(false);
 
   // Step 3 state
   const [scrapingAll, setScrapingAll] = useState(false);
@@ -149,6 +250,8 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
     setSearching(true);
     setSearchError(null);
     setSearchProgress({ done: 0, total: 1 });
+    setSearchStats(null);
+    setCompetitors([]);
 
     try {
       const res = await fetch(`/api/evaluations/${evaluationId}/discover`, {
@@ -160,19 +263,26 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
       if (data.error) {
         setSearchError(data.error);
       } else {
-        const results = ((data.results ?? []) as Competitor[])
-          .filter((r) => r.competitor_type === "direct")
-          .map((r) => ({
+        setSearchStats(data.stats || null);
+
+        const mapResult = (r: { url: string; title: string; description: string; competitor_type: string; discovered_via?: string }, selected: boolean): Competitor => ({
           ...r,
-          competitor_name: r.competitor_name || r.url,
-          selected: true,
+          competitor_name: r.url,
+          selected,
           scraped: false,
           scraping: false,
-        }));
-        if (results.length > 0) {
-          setCompetitors(results);
+        });
+
+        const primaryResults = (data.primary || []).map((r: Competitor) => mapResult(r, true));
+        const googleOnlyResults = (data.googleOnly || []).map((r: Competitor) => mapResult(r, false));
+        const aiOnlyResults = (data.aiOnly || []).map((r: Competitor) => mapResult(r, false));
+
+        const all = [...primaryResults, ...googleOnlyResults, ...aiOnlyResults];
+
+        if (all.length > 0) {
+          setCompetitors(all);
         } else {
-          setSearchError("No direct competitors found. Try adding URLs manually below.");
+          setSearchError("No competitors found. Try adding URLs manually below.");
         }
       }
     } catch {
@@ -546,15 +656,22 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
         {step === 1 && (
           <div className="space-y-5">
+            {/* Search summary + button */}
             <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm text-slate-600">
-                  We search Google (keywords) and AI (questions) in parallel — only competitors found in both are shown.
-                  Up to 10 matched results, filtered to real businesses only.
-                </p>
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                    <Lightbulb className="h-3.5 w-3.5" />
+                    {selectedQuestions.length} AI Questions → Claude
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-green-700">
+                    <Search className="h-3.5 w-3.5" />
+                    {selectedKeywords.length} Google Keywords → Tavily
+                  </span>
+                </div>
                 {searchProgress && (
-                  <p className="mt-1 text-xs font-medium text-blue-600">
-                    Searching...
+                  <p className="mt-2 text-xs font-medium text-blue-600">
+                    Searching Google and AI in parallel...
                   </p>
                 )}
               </div>
@@ -567,6 +684,17 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                 Find Competitors
               </Button>
             </div>
+
+            {/* Stats bar */}
+            {searchStats && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
+                <span>Google found <strong>{searchStats.googleResults}</strong> sites</span>
+                <span>AI cited <strong>{searchStats.aiResults}</strong> sites</span>
+                <span className="text-blue-600"><strong>{searchStats.matched}</strong> matched both</span>
+                {searchStats.googleOnly > 0 && <span className="text-green-600"><strong>{searchStats.googleOnly}</strong> Google-only</span>}
+                {searchStats.aiOnly > 0 && <span className="text-purple-600"><strong>{searchStats.aiOnly}</strong> AI-only</span>}
+              </div>
+            )}
 
             {searchError && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
@@ -592,55 +720,92 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
             {/* Competitor list */}
             {competitors.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <p className="text-sm font-medium text-slate-600">
                   {selectedCompetitors.length} of {competitors.length} selected
                 </p>
-                {competitors.map((comp, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex items-start gap-3 rounded-lg border p-3 transition-colors",
-                      comp.selected ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={comp.selected}
-                      onChange={() =>
-                        setCompetitors((prev) =>
-                          prev.map((c, idx) => (idx === i ? { ...c, selected: !c.selected } : c))
-                        )
-                      }
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 shrink-0 text-slate-400" />
-                        <span className="truncate text-sm font-medium text-slate-800">
-                          {comp.competitor_name}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 capitalize">
-                          {comp.competitor_type.replace("_", " ")}
-                        </span>
-                      </div>
-                      {comp.title && (
-                        <p className="mt-0.5 truncate text-xs text-slate-500">{comp.title}</p>
-                      )}
-                      {comp.description && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">{comp.description}</p>
-                      )}
-                    </div>
+
+                {/* Primary (cross-match) — always expanded, auto-selected */}
+                {competitors.filter((c) => c.discovered_via === "both").length > 0 && (
+                  <CompetitorGroup
+                    title="Primary Competitors"
+                    description="Found in both Google and AI results"
+                    badgeClass="bg-blue-100 text-blue-700"
+                    badgeText="Both"
+                    comps={competitors.filter((c) => c.discovered_via === "both")}
+                    competitors={competitors}
+                    setCompetitors={setCompetitors}
+                  />
+                )}
+
+                {/* Google-only — collapsible */}
+                {competitors.filter((c) => c.discovered_via === "google").length > 0 && (
+                  <div>
                     <button
-                      onClick={() =>
-                        setCompetitors((prev) => prev.filter((_, idx) => idx !== i))
-                      }
-                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-500"
+                      onClick={() => setShowGoogleOnly(!showGoogleOnly)}
+                      className="flex w-full items-center gap-2 text-sm font-medium text-slate-700"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", !showGoogleOnly && "-rotate-90")} />
+                      Google-Only ({competitors.filter((c) => c.discovered_via === "google").length})
+                      <span className="text-xs font-normal text-slate-400">— ranks on Google, AI didn&apos;t cite</span>
                     </button>
+                    {showGoogleOnly && (
+                      <div className="mt-2">
+                        <CompetitorGroup
+                          title=""
+                          description=""
+                          badgeClass="bg-green-100 text-green-700"
+                          badgeText="Google"
+                          comps={competitors.filter((c) => c.discovered_via === "google")}
+                          competitors={competitors}
+                          setCompetitors={setCompetitors}
+                          hideHeader
+                        />
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
+
+                {/* AI-only — collapsible */}
+                {competitors.filter((c) => c.discovered_via === "ai").length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowAiOnly(!showAiOnly)}
+                      className="flex w-full items-center gap-2 text-sm font-medium text-slate-700"
+                    >
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", !showAiOnly && "-rotate-90")} />
+                      AI-Only ({competitors.filter((c) => c.discovered_via === "ai").length})
+                      <span className="text-xs font-normal text-slate-400">— AI cited, doesn&apos;t rank on Google</span>
+                    </button>
+                    {showAiOnly && (
+                      <div className="mt-2">
+                        <CompetitorGroup
+                          title=""
+                          description=""
+                          badgeClass="bg-purple-100 text-purple-700"
+                          badgeText="AI"
+                          comps={competitors.filter((c) => c.discovered_via === "ai")}
+                          competitors={competitors}
+                          setCompetitors={setCompetitors}
+                          hideHeader
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual additions */}
+                {competitors.filter((c) => !c.discovered_via).length > 0 && (
+                  <CompetitorGroup
+                    title="Manual"
+                    description=""
+                    badgeClass="bg-slate-100 text-slate-600"
+                    badgeText="Manual"
+                    comps={competitors.filter((c) => !c.discovered_via)}
+                    competitors={competitors}
+                    setCompetitors={setCompetitors}
+                  />
+                )}
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-slate-300 py-10 text-center">
