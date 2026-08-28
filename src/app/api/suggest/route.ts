@@ -157,54 +157,83 @@ function deriveTopic(title: string, h1: string, metaDesc: string): string {
       .replace(/\s+/g, " ")
       .trim();
 
+  // Strip filler/tagline phrases that make topics too specific for autocomplete
+  const stripFiller = (s: string) =>
+    s
+      .replace(/\b(at|with|for|from|by|to|of|in|near|serving|based in)\b[^|]*$/gi, "")
+      .replace(/\b(competitive|affordable|best|quality|premium|trusted|reliable|professional|expert|experienced|certified|licensed|insured|guaranteed|warranty|free|cheap|discount|special|offer|prices?|pricing|cost|quote|estimate|consultation)\b[^|]*$/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Service/business keywords for extracting core topic from taglines
+  const SERVICE_KEYWORDS = "services?|experts?|company|companies|contractors?|builders?|construction|renovation|remodeling|plumbing|electrical|hvac|roofing|cleaning|pest|painting|flooring|windows|solar|insulation|landscaping|fencing|paving|concrete|demolition|homes?|houses?|realty|realtor|agency|agencies|firm|firms|studio|studios|architecture|architects?|interiors?|designers?|engineering|engineers?|manufacturing|manufacturers?|suppliers?|distributors?|wholesale|retail|store|shop|clinic|clinics|dental|medical|legal|law|attorney|lawyers?|accounting|financial|insurance|mortgage|banking|investment|consulting|consultants?|marketing|advertising|seo|web|software|app|mobile|cloud|data|ai|ml|digital|technology|tech|it|cyber|security|automation|robotics|logistics|shipping|transport|trucking|freight|warehouse|storage|moving|removals|cleaning|sanitization|disinfection|restoration|water|fire|mold|damage|repair|repairs|installation|installers?|maintenance";
+
   const candidates: string[] = [];
 
-  // h1 is the best signal — but extract the service part, not the tagline
+  // Title segments are often the best — "Custom Home Builder Sydney | Luxury Homes & Duplex Builds"
+  // gives "Custom Home Builder Sydney" which is exactly the topic
+  if (title) {
+    const cleanedTitle = clean(stripNoise(title));
+    const segments = cleanedTitle.split(/[|\-–—:•·&]/).map(clean).filter(Boolean);
+    // Sort by length descending — the descriptive segment is usually longer than the brand
+    for (const seg of segments.sort((a, b) => b.length - a.length)) {
+      // Try to extract a service phrase from this segment
+      const segServiceMatch = seg.match(new RegExp(`\\b([a-z]+(?:\\s+[a-z]+)?)\\s+(${SERVICE_KEYWORDS})\\b`, "i"));
+      if (segServiceMatch) {
+        candidates.push(clean(segServiceMatch[0]));
+      }
+      candidates.push(seg);
+    }
+  }
+
+  // h1 — extract the service part, not the full tagline
   if (h1) {
     const cleanedH1 = clean(stripNoise(h1));
-    // If h1 is a tagline like "The Plumbing Experts You've Trusted for Over 90 Years",
-    // try to extract the core noun phrase
-    const serviceMatch = cleanedH1.match(/\b([a-z]+(?:\s+[a-z]+)?)\s+(services?|experts?|company|contractors?|repair|cleaning|installation)\b/i);
-    if (serviceMatch) {
-      candidates.push(clean(serviceMatch[0]));
+    // Try to extract a service phrase from h1
+    const h1ServiceMatch = cleanedH1.match(new RegExp(`\\b([a-z]+(?:\\s+[a-z]+)?)\\s+(${SERVICE_KEYWORDS})\\b`, "i"));
+    if (h1ServiceMatch) {
+      candidates.push(clean(h1ServiceMatch[0]));
+    }
+    // Strip filler phrases from h1
+    const strippedH1 = clean(stripFiller(cleanedH1));
+    if (strippedH1 && strippedH1.length < cleanedH1.length) {
+      candidates.push(strippedH1);
     }
     candidates.push(cleanedH1);
   }
 
-  if (title) {
-    const cleanedTitle = clean(stripNoise(title));
-    const segments = cleanedTitle.split(/[|\-–—:•·]/).map(clean).filter(Boolean);
-    // The longer segment tends to be the descriptive one; the shorter is the brand.
-    candidates.push(...segments.sort((a, b) => b.length - a.length));
-  }
-
-  // Meta description first sentence is often the most concise description
+  // Meta description first sentence
   if (metaDesc) {
     const firstSentence = clean(metaDesc.split(/[.!?]/)[0]);
-    // Try to extract a service phrase from meta description
-    const metaServiceMatch = firstSentence.match(/\b([a-z]+(?:\s+[a-z]+)?)\s+(services?|company|contractors?|repair|cleaning|installation|solutions?)\b/i);
+    const metaServiceMatch = firstSentence.match(new RegExp(`\\b([a-z]+(?:\\s+[a-z]+)?)\\s+(${SERVICE_KEYWORDS})\\b`, "i"));
     if (metaServiceMatch) {
       candidates.push(clean(metaServiceMatch[0]));
     }
     candidates.push(firstSentence);
   }
 
-  // Try each candidate, relaxing constraints
+  // Try each candidate, preferring shorter ones (2-5 words) that are still descriptive
   for (const c of candidates) {
     const words = c.split(/\s+/).filter(Boolean);
-    // First pass: 2-8 words, reasonable length
+    if (words.length >= 2 && words.length <= 5 && c.length >= 8 && c.length <= 50) {
+      return c.toLowerCase();
+    }
+  }
+
+  // Second pass: relax to 2-8 words
+  for (const c of candidates) {
+    const words = c.split(/\s+/).filter(Boolean);
     if (words.length >= 2 && words.length <= 8 && c.length >= 8 && c.length <= 80) {
       return c.toLowerCase();
     }
   }
 
-  // Second pass: if nothing fit, try extracting the first few meaningful words
+  // Third pass: extract first few meaningful words
   for (const c of candidates) {
     const words = c.split(/\s+/).filter((w) => w.length > 2);
     if (words.length >= 2) {
-      // Take first 2-5 meaningful words
-      const shortTopic = words.slice(0, Math.min(5, words.length)).join(" ");
-      if (shortTopic.length >= 8 && shortTopic.length <= 60) {
+      const shortTopic = words.slice(0, Math.min(4, words.length)).join(" ");
+      if (shortTopic.length >= 8 && shortTopic.length <= 50) {
         return shortTopic.toLowerCase();
       }
     }
