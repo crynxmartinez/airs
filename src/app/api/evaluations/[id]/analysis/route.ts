@@ -260,8 +260,15 @@ export async function GET(
   for (const r of perQuestion) {
     for (const p of r.predictions) {
       await run(
-        `INSERT OR REPLACE INTO coverage (id, evaluation_id, run_id, competitor_id, competitor_label, question, answer_type, level, score, term_coverage, subject_coverage, specificity, is_depth_gap, passage, heading, gap_evidence, source_url, source_title, scored_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))`,
+        `INSERT INTO coverage (id, evaluation_id, run_id, competitor_id, competitor_label, question, answer_type, level, score, term_coverage, subject_coverage, specificity, is_depth_gap, passage, heading, gap_evidence, source_url, source_title, scored_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+         ON CONFLICT (run_id, competitor_id, question) DO UPDATE SET
+           answer_type = EXCLUDED.answer_type, level = EXCLUDED.level, score = EXCLUDED.score,
+           term_coverage = EXCLUDED.term_coverage, subject_coverage = EXCLUDED.subject_coverage,
+           specificity = EXCLUDED.specificity, is_depth_gap = EXCLUDED.is_depth_gap,
+           passage = EXCLUDED.passage, heading = EXCLUDED.heading, gap_evidence = EXCLUDED.gap_evidence,
+           source_url = EXCLUDED.source_url, source_title = EXCLUDED.source_title,
+           scored_at = EXCLUDED.scored_at`,
         [
           generateId(),
           id,
@@ -287,8 +294,15 @@ export async function GET(
     // Also persist self assessment if present
     if (r.self) {
       await run(
-        `INSERT OR REPLACE INTO coverage (id, evaluation_id, run_id, competitor_id, competitor_label, question, answer_type, level, score, term_coverage, subject_coverage, specificity, is_depth_gap, passage, heading, gap_evidence, source_url, source_title, scored_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))`,
+        `INSERT INTO coverage (id, evaluation_id, run_id, competitor_id, competitor_label, question, answer_type, level, score, term_coverage, subject_coverage, specificity, is_depth_gap, passage, heading, gap_evidence, source_url, source_title, scored_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
+         ON CONFLICT (run_id, competitor_id, question) DO UPDATE SET
+           answer_type = EXCLUDED.answer_type, level = EXCLUDED.level, score = EXCLUDED.score,
+           term_coverage = EXCLUDED.term_coverage, subject_coverage = EXCLUDED.subject_coverage,
+           specificity = EXCLUDED.specificity, is_depth_gap = EXCLUDED.is_depth_gap,
+           passage = EXCLUDED.passage, heading = EXCLUDED.heading, gap_evidence = EXCLUDED.gap_evidence,
+           source_url = EXCLUDED.source_url, source_title = EXCLUDED.source_title,
+           scored_at = EXCLUDED.scored_at`,
         [
           generateId(),
           id,

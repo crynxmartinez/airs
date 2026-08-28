@@ -32,7 +32,7 @@ export async function GET(
 
   const runs = await query<RunRow>(
     `SELECT id, ran_at, engine_version, questions, sites
-     FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC, rowid DESC`,
+     FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC, id DESC`,
     [id]
   );
 

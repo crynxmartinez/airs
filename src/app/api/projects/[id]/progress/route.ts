@@ -47,7 +47,7 @@ export async function GET(
     `SELECT r.id, r.evaluation_id, r.ran_at, r.engine_version, r.questions, r.sites
        FROM coverage_runs r JOIN evaluations e ON e.id = r.evaluation_id
       WHERE e.project_id = ?
-      ORDER BY r.ran_at DESC, r.rowid DESC`,
+      ORDER BY r.ran_at DESC, r.id DESC`,
     [id]
   );
 

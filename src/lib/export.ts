@@ -125,7 +125,7 @@ export async function exportAudit(input: ExportInput): Promise<string> {
   // Verdicts from the most recent run only. Mixing runs would blend a pre-fix and post-fix
   // view of the same competitor into one prevalence figure.
   const latestRun = await queryOne<{ id: string; ran_at: string }>(
-    "SELECT id, ran_at FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC, rowid DESC LIMIT 1",
+    "SELECT id, ran_at FROM coverage_runs WHERE evaluation_id = ? ORDER BY ran_at DESC, id DESC LIMIT 1",
     [evaluationId]
   );
 
