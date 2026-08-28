@@ -259,7 +259,7 @@ export async function captureClaudeAnswer(
     [
       answerId,
       queryId,
-      projectId,
+      projectId || null,
       query,
       answerText,
       JSON.stringify(fanOutQueries),
@@ -280,7 +280,7 @@ export async function captureClaudeAnswer(
       [
         generateId(),
         answerId,
-        projectId,
+        projectId || null,
         citation.url,
         citation.quoted_passage,
         citation.position,
@@ -442,9 +442,11 @@ async function ensureAiQuery(
   engine: string,
   subIntentId?: string
 ): Promise<string> {
+  // Empty string project_id would violate FK constraint on ai_queries.project_id → projects.id
+  const pid = projectId || null;
   const existing = await query<{ id: string; sub_intent_id: string | null }>(
-    "SELECT id, sub_intent_id FROM ai_queries WHERE project_id = ? AND query = ? AND engine = ?",
-    [projectId, queryString, engine]
+    "SELECT id, sub_intent_id FROM ai_queries WHERE project_id IS NOT DISTINCT FROM ? AND query = ? AND engine = ?",
+    [pid, queryString, engine]
   );
   if (existing.length > 0) {
     // Backfill only. An existing row that already names a sub-intent keeps it: the same query
@@ -460,7 +462,7 @@ async function ensureAiQuery(
   await run(
     `INSERT INTO ai_queries (id, project_id, query, engine, tracked, sub_intent_id, created_at)
      VALUES (?, ?, ?, ?, 1, ?, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))`,
-    [id, projectId, queryString, engine, subIntentId ?? null]
+    [id, pid, queryString, engine, subIntentId ?? null]
   );
   return id;
 }

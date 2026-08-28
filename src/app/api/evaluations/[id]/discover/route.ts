@@ -80,7 +80,7 @@ export async function POST(
   const claudePromises = effectiveQuestions.map((q) =>
     captureClaudeAnswer(
       anchorToMarket(q),
-      evaluation.project_id ?? "",
+      evaluation.project_id || "",
       evaluation.digital_asset_url,
       DISCOVERY_PROFILE
     )

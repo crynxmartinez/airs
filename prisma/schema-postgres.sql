@@ -192,6 +192,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_intents_eval_q ON sub_intents(evaluati
 
 CREATE INDEX IF NOT EXISTS idx_evaluations_project ON evaluations(project_id);
 CREATE INDEX IF NOT EXISTS idx_competitors_eval ON competitors(evaluation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_competitors_eval_url ON competitors(evaluation_id, url);
 CREATE INDEX IF NOT EXISTS idx_evidence_eval ON evidence(evaluation_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_comp ON evidence(competitor_id);
 CREATE INDEX IF NOT EXISTS idx_dim_scores_eval ON dimension_scores(evaluation_id);
