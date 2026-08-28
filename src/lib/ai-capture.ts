@@ -243,7 +243,7 @@ export async function captureClaudeAnswer(
   const fanOutQueries = extractFanOutQueries(data);
 
   // Persist to database
-  const queryId = ensureAiQuery(projectId, query, "claude", options.subIntentId);
+  const queryId = await ensureAiQuery(projectId, query, "claude", options.subIntentId);
   const answerId = generateId();
   // `usage` is the only trustworthy cost signal — token counts estimated client-side drift,
   // and web search plus code execution mean the output is nowhere near the visible answer's
