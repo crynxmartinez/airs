@@ -24,6 +24,11 @@ interface QuestionSuggestion {
   source: string;
 }
 
+interface KeywordSuggestion {
+  keyword: string;
+  source: string;
+}
+
 export function EvaluationWizard({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -32,12 +37,15 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
   // Step 1 state
   const [digitalAssetUrl, setDigitalAssetUrl] = useState("");
-  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+  const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [manualQuestion, setManualQuestion] = useState("");
+  const [manualKeyword, setManualKeyword] = useState("");
 
   // Suggestions state
   const [analyzing, setAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState<QuestionSuggestion[]>([]);
+  const [keywordSuggestions, setKeywordSuggestions] = useState<KeywordSuggestion[]>([]);
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [pageInfo, setPageInfo] = useState<{ title: string; domain: string; businessName: string } | null>(null);
 
@@ -71,6 +79,9 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
     setAnalyzing(true);
     setSuggestError(null);
     setSuggestions([]);
+    setKeywordSuggestions([]);
+    setSelectedQuestions([]);
+    setSelectedKeywords([]);
     setPageInfo(null);
     try {
       const res = await fetch("/api/suggest", {
@@ -83,34 +94,58 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
         setSuggestError(data.error);
       } else {
         setSuggestions(data.questions || []);
+        setKeywordSuggestions(data.keywords || []);
         setPageInfo({
           title: data.pageTitle || "",
           domain: data.domain || "",
           businessName: data.businessName || "",
         });
+        // Auto-select top 3 questions and top 3 keywords
+        const autoQ = (data.questions || []).slice(0, 3).map((s: QuestionSuggestion) => s.question);
+        const autoK = (data.keywords || []).slice(0, 3).map((s: KeywordSuggestion) => s.keyword);
+        setSelectedQuestions(autoQ);
+        setSelectedKeywords(autoK);
       }
     } catch {
-      setSuggestError("Could not analyze this URL. You can still type questions manually.");
+      setSuggestError("Could not analyze this URL. You can still type questions and keywords manually.");
     }
     setAnalyzing(false);
   }
 
-  function selectQuestion(question: string) {
-    setSelectedQuestion((prev) => (prev === question ? null : question));
+  function toggleQuestion(question: string) {
+    setSelectedQuestions((prev) =>
+      prev.includes(question) ? prev.filter((q) => q !== question) : [...prev, question]
+    );
+  }
+
+  function toggleKeyword(keyword: string) {
+    setSelectedKeywords((prev) =>
+      prev.includes(keyword) ? prev.filter((k) => k !== keyword) : [...prev, keyword]
+    );
   }
 
   function addManualQuestion() {
     const q = manualQuestion.trim().toLowerCase();
     if (!q) return;
-    setSelectedQuestion(q);
     if (!suggestions.some((s) => s.question === q)) {
       setSuggestions((prev) => [...prev, { question: q, source: "manual" }]);
     }
+    setSelectedQuestions((prev) => prev.includes(q) ? prev : [...prev, q]);
     setManualQuestion("");
   }
 
+  function addManualKeyword() {
+    const k = manualKeyword.trim().toLowerCase();
+    if (!k) return;
+    if (!keywordSuggestions.some((s) => s.keyword === k)) {
+      setKeywordSuggestions((prev) => [...prev, { keyword: k, source: "manual" }]);
+    }
+    setSelectedKeywords((prev) => prev.includes(k) ? prev : [...prev, k]);
+    setManualKeyword("");
+  }
+
   async function handleSearch() {
-    if (!selectedQuestion) return;
+    if (selectedQuestions.length === 0 && selectedKeywords.length === 0) return;
     setSearching(true);
     setSearchError(null);
     setSearchProgress({ done: 0, total: 1 });
@@ -119,7 +154,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
       const res = await fetch(`/api/evaluations/${evaluationId}/discover`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: selectedQuestion }),
+        body: JSON.stringify({ questions: selectedQuestions, keywords: selectedKeywords }),
       });
       const data = await res.json();
       if (data.error) {
@@ -176,27 +211,29 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
   async function handleNext() {
     if (step === 0) {
-      // Create evaluation. `primary_query` stays as the seed for the audit path — the first
-      // selected question fills it — and the full set is saved as manual sub-intents, which
-      // the analysis ranks above autocomplete and the demand rebuild leaves alone.
+      // Create evaluation. `primary_query` uses the first selected question as the seed.
+      // Questions go to Claude AI, keywords go to Tavily/Google.
+      if (selectedQuestions.length === 0 && selectedKeywords.length === 0) return;
       setSaving(true);
       try {
+        const primaryQuery = selectedQuestions[0] || selectedKeywords[0];
         const res = await fetch("/api/evaluations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             project_id: projectId,
-            primary_query: selectedQuestion,
+            primary_query: primaryQuery,
             digital_asset_url: digitalAssetUrl,
             target_location: targetLocation || undefined,
           }),
         });
         const data = await res.json();
         setEvaluationId(data.id);
+        // Save both questions and keywords
         await fetch(`/api/evaluations/${data.id}/questions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ questions: [selectedQuestion] }),
+          body: JSON.stringify({ questions: selectedQuestions, keywords: selectedKeywords }),
         });
         setStep(1);
       } catch (err) { console.error("[wizard.tsx]", err); }
@@ -283,7 +320,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   const selectedCompetitors = competitors.filter((c) => c.selected);
   const canProceed =
     step === 0
-      ? !!selectedQuestion && !!digitalAssetUrl
+      ? (selectedQuestions.length > 0 || selectedKeywords.length > 0) && !!digitalAssetUrl
       : step === 1
         ? selectedCompetitors.length > 0
         : step === 2
@@ -367,25 +404,25 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
               </div>
             )}
 
-            {/* Question suggestions */}
+            {/* AI Question suggestions */}
             {suggestions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
                   <Lightbulb className="h-4 w-4 text-amber-500" />
                   <label className="text-sm font-medium text-slate-700">
-                    Suggested Questions
+                    AI Questions
                   </label>
                   <span className="text-xs text-slate-400">
-                    — pick one a buyer would ask
+                    — sent to Claude ({selectedQuestions.length} selected)
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {suggestions.map((s, i) => {
-                    const active = selectedQuestion === s.question;
+                    const active = selectedQuestions.includes(s.question);
                     return (
                       <button
                         key={i}
-                        onClick={() => selectQuestion(s.question)}
+                        onClick={() => toggleQuestion(s.question)}
                         className={cn(
                           "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
                           active
@@ -406,7 +443,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
               </div>
             )}
 
-            {/* Manual question input (always visible) */}
+            {/* Manual question input */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Add Your Own Question
@@ -425,11 +462,66 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                   Add
                 </Button>
               </div>
-              <p className="mt-1.5 text-xs text-slate-400">
-                {selectedQuestion
-                  ? "Question selected"
-                  : "Pick a suggestion above or type your own. This is what the AI will be asked."}
-              </p>
+            </div>
+
+            {/* Google Keyword suggestions */}
+            {keywordSuggestions.length > 0 && (
+              <div className="border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Search className="h-4 w-4 text-green-500" />
+                  <label className="text-sm font-medium text-slate-700">
+                    Google Keywords
+                  </label>
+                  <span className="text-xs text-slate-400">
+                    — sent to Tavily ({selectedKeywords.length} selected)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {keywordSuggestions.map((s, i) => {
+                    const active = selectedKeywords.includes(s.keyword);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => toggleKeyword(s.keyword)}
+                        className={cn(
+                          "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
+                          active
+                            ? "border-green-600 bg-green-600 text-white"
+                            : "border-slate-300 bg-white text-slate-700 hover:border-green-400 hover:bg-green-50"
+                        )}
+                      >
+                        {s.keyword}
+                        {s.source === "manual" && (
+                          <span className={cn("ml-1.5 text-xs", active ? "text-green-200" : "text-slate-400")}>
+                            yours
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Manual keyword input */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Add Your Own Keyword
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualKeyword}
+                  onChange={(e) => setManualKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addManualKeyword()}
+                  placeholder="e.g., emergency plumber sydney cost"
+                  className="flex-1 rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <Button onClick={addManualKeyword} variant="secondary" disabled={!manualKeyword.trim()}>
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
             </div>
 
             {/* Target location */}
@@ -457,7 +549,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm text-slate-600">
-                  We search Google and AI in parallel — only competitors found in both are shown.
+                  We search Google (keywords) and AI (questions) in parallel — only competitors found in both are shown.
                   Up to 10 matched results, filtered to real businesses only.
                 </p>
                 {searchProgress && (
@@ -466,7 +558,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
                   </p>
                 )}
               </div>
-              <Button onClick={handleSearch} disabled={searching || !selectedQuestion} variant="secondary">
+              <Button onClick={handleSearch} disabled={searching || (selectedQuestions.length === 0 && selectedKeywords.length === 0)} variant="secondary">
                 {searching ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -636,10 +728,24 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
             <div className="space-y-2 rounded-lg bg-slate-50 p-4">
               <div className="flex flex-col gap-1 text-sm">
-                <span className="text-slate-500">Question</span>
-                <span className="font-medium text-slate-800">
-                  {selectedQuestion}
-                </span>
+                <span className="text-slate-500">AI Questions ({selectedQuestions.length})</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedQuestions.map((q, i) => (
+                    <span key={i} className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-slate-500">Google Keywords ({selectedKeywords.length})</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedKeywords.map((k, i) => (
+                    <span key={i} className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+                      {k}
+                    </span>
+                  ))}
+                </div>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Your URL</span>

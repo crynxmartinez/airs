@@ -93,35 +93,36 @@ export async function POST(req: NextRequest) {
       acceptsIntent(classifyCommercialIntent(s.question), "commercial")
     );
 
-    // Buying and evaluating questions first.
-    //
-    // The wizard pre-selects the top three, so this ordering decides what gets paid for.
-    // Autocomplete ranks by raw popularity, and for a profession the most popular queries are
-    // definitional — leaving "what is a commercial broker" to be auto-selected ahead of
-    // "how much does a broker cost", which is the one a buyer actually asks.
-    // Intent is the primary sort and question-shape only the tiebreak, not the other way round.
-    //
-    // Sorting question-shaped items first put every "what is a commercial broker" above every
-    // "business insurance broker melbourne", because for a profession the question-shaped
-    // queries are almost all definitional. The three that got auto-selected — and paid for —
-    // were the three least useful ones on the list.
-    //
-    // A phrase is a perfectly good thing to ask an assistant. "commercial insurance broker
-    // melbourne" is what a buyer types; "what is a commercial broker" is what a student types.
+    // Split into two buckets:
+    // - Questions (for Claude AI): question-shaped queries — "how much does X cost", "what is X"
+    // - Keywords (for Google/Tavily): phrase-shaped queries — "X cost", "X near me", "X reviews"
     const INTENT_RANK: Record<string, number> = { buying: 0, evaluating: 1, general: 2 };
     const rankOf = (q: string) => INTENT_RANK[classifyCommercialIntent(q)] ?? 3;
 
-    const questions = [...buying]
+    const questionShaped = buying.filter((s) => s.isQuestion);
+    const keywordShaped = buying.filter((s) => !s.isQuestion);
+
+    const questions = [...questionShaped]
       .sort(
         (a, b) =>
           rankOf(a.question) - rankOf(b.question) ||
-          Number(b.isQuestion) - Number(a.isQuestion)
+          a.question.localeCompare(b.question)
       )
       .slice(0, 12)
       .map((s) => ({ question: s.question, source: s.source }));
 
+    const keywords = [...keywordShaped]
+      .sort(
+        (a, b) =>
+          rankOf(a.question) - rankOf(b.question) ||
+          a.question.localeCompare(b.question)
+      )
+      .slice(0, 12)
+      .map((s) => ({ keyword: s.question, source: s.source }));
+
     return NextResponse.json({
       questions,
+      keywords,
       topic,
       pageTitle: title,
       metaDescription: metaDesc,

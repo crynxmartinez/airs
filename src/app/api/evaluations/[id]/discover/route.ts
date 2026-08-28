@@ -9,14 +9,12 @@ import { hostOf } from "@/lib/url";
 /**
  * Competitor discovery — Google + AI cross-match.
  *
- * 1. Tavily fetches top 20 Google search results
- * 2. Claude AI captures 20 cited sources
+ * 1. Tavily fetches Google results for each keyword
+ * 2. Claude AI captures cited sources for each question
  * 3. We match by host — only competitors appearing in BOTH are returned (up to 10)
  *
- * This surfaces competitors that rank on Google AND get cited by AI.
- * Sites in only one list are filtered out.
- *
- * Body: { query?: string, limit?: number, force?: boolean }
+ * Body: { questions?: string[], keywords?: string[], limit?: number, force?: boolean }
+ * Falls back to evaluation.primary_query if questions/keywords not provided.
  */
 
 const FETCH_COUNT = 20;
@@ -31,29 +29,30 @@ export async function POST(
   if (!evaluation) return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const baseQuery: string = (body?.query || evaluation.primary_query || "").trim();
 
-  // Anchor the query to the market before capturing.
-  //
-  // The search path this replaced appended the location to the query text, and dropping that
-  // showed up immediately: "office cleaning services" for an Australian client retrieved
-  // ServiceMaster, Office Pride, a Cleveland maid service and Yelp listings for Los Angeles.
-  // A retrieval set from the wrong continent is worse than no discovery — every downstream
-  // verdict is then computed against businesses the client will never compete with.
-  //
-  // The market becomes part of the query string rather than a side channel, so the reuse
-  // lookup keys on it too: the same topic in a different market is a different capture.
-  const market = (evaluation.target_location ?? "").trim();
-  const searchQuery: string =
-    market && !baseQuery.toLowerCase().includes(market.toLowerCase())
-      ? `${baseQuery} ${market}`
-      : baseQuery;
-  if (!baseQuery) {
+  // Questions go to Claude AI, keywords go to Tavily/Google
+  const questions: string[] = Array.isArray(body?.questions) ? body.questions : [];
+  const keywords: string[] = Array.isArray(body?.keywords) ? body.keywords : [];
+
+  // Fallback to primary_query if neither is provided
+  const fallbackQuery: string = (body?.query || evaluation.primary_query || "").trim();
+  if (questions.length === 0 && keywords.length === 0 && !fallbackQuery) {
     return NextResponse.json(
-      { error: "No query — set primary_query on the evaluation or pass one" },
+      { error: "No questions or keywords provided" },
       { status: 400 }
     );
   }
+  const effectiveQuestions = questions.length > 0 ? questions : [fallbackQuery];
+  const effectiveKeywords = keywords.length > 0 ? keywords : [fallbackQuery];
+
+  // Anchor queries to the market
+  const market = (evaluation.target_location ?? "").trim();
+  const anchorToMarket = (q: string): string => {
+    if (market && !q.toLowerCase().includes(market.toLowerCase())) {
+      return `${q} ${market}`;
+    }
+    return q;
+  };
 
   const selfHost = hostOf(evaluation.digital_asset_url);
   const hasTavily = !!process.env.TAVILY_API_KEY;
@@ -66,47 +65,63 @@ export async function POST(
     );
   }
 
-  // --- Fetch Tavily (Google) and Claude (AI) in parallel ---
-  const [tavilySettled, claudeSettled] = await Promise.allSettled([
-    searchTavily(searchQuery, {
+  // --- Run Tavily searches (keywords) and Claude captures (questions) in parallel ---
+  // Multiple keywords → multiple Tavily searches, merge all results
+  // Multiple questions → multiple Claude captures, merge all citations
+  const tavilyPromises = effectiveKeywords.map((kw) =>
+    searchTavily(anchorToMarket(kw), {
       maxResults: FETCH_COUNT,
       searchDepth: "basic",
       excludeDomains: selfHost ? [selfHost] : [],
       includeAnswer: false,
-    }),
+    })
+  );
+
+  const claudePromises = effectiveQuestions.map((q) =>
     captureClaudeAnswer(
-      searchQuery,
+      anchorToMarket(q),
       evaluation.project_id ?? "",
       evaluation.digital_asset_url,
       DISCOVERY_PROFILE
-    ),
+    )
+  );
+
+  const [tavilyResults, claudeResults] = await Promise.allSettled([
+    Promise.all(tavilyPromises),
+    Promise.all(claudePromises),
   ]);
 
-  if (tavilySettled.status === "rejected") {
-    const msg = tavilySettled.reason instanceof Error ? tavilySettled.reason.message : String(tavilySettled.reason);
+  if (tavilyResults.status === "rejected") {
+    const msg = tavilyResults.reason instanceof Error ? tavilyResults.reason.message : String(tavilyResults.reason);
     return NextResponse.json({ error: `Google search failed: ${msg}`, reason: "tavily_failed" }, { status: 502 });
   }
-  if (claudeSettled.status === "rejected") {
-    const msg = claudeSettled.reason instanceof Error ? claudeSettled.reason.message : String(claudeSettled.reason);
+  if (claudeResults.status === "rejected") {
+    const msg = claudeResults.reason instanceof Error ? claudeResults.reason.message : String(claudeResults.reason);
     return NextResponse.json({ error: `AI search failed: ${msg}`, reason: "claude_failed" }, { status: 502 });
   }
 
-  // --- Build host sets ---
+  // --- Build host sets from merged results ---
   const tavilyByHost = new Map<string, { url: string; title: string; content: string }>();
-  for (const r of tavilySettled.value.results) {
-    const host = hostOf(r.url);
-    if (!host || host === selfHost) continue;
-    if (!tavilyByHost.has(host)) {
-      tavilyByHost.set(host, { url: r.url, title: r.title, content: r.content });
+  for (const tavilyResult of tavilyResults.value) {
+    for (const r of tavilyResult.results) {
+      const host = hostOf(r.url);
+      if (!host || host === selfHost) continue;
+      if (!tavilyByHost.has(host)) {
+        tavilyByHost.set(host, { url: r.url, title: r.title, content: r.content });
+      }
     }
   }
 
   const claudeByHost = new Map<string, { url: string; title: string }>();
-  for (const c of claudeSettled.value.citations) {
-    const host = hostOf(c.url);
-    if (!host || host === selfHost) continue;
-    if (!claudeByHost.has(host)) {
-      claudeByHost.set(host, { url: c.url, title: host });
+  let totalEstimatedCost = 0;
+  for (const claudeResult of claudeResults.value) {
+    totalEstimatedCost += claudeResult.usage.estimated_usd;
+    for (const c of claudeResult.citations) {
+      const host = hostOf(c.url);
+      if (!host || host === selfHost) continue;
+      if (!claudeByHost.has(host)) {
+        claudeByHost.set(host, { url: c.url, title: host });
+      }
     }
   }
 
@@ -150,10 +165,11 @@ export async function POST(
   }
 
   return NextResponse.json({
-    query: searchQuery,
+    questions: effectiveQuestions,
+    keywords: effectiveKeywords,
     market: market || null,
     discovered_via: "google_ai_match",
-    estimated_cost_usd: claudeSettled.value.usage.estimated_usd,
+    estimated_cost_usd: totalEstimatedCost,
     google_results: tavilyByHost.size,
     ai_results: claudeByHost.size,
     matched: matched.length,

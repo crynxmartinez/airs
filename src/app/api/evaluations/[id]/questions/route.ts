@@ -29,10 +29,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 /**
- * POST — add questions. Body: `{ questions: string[] }`.
+ * POST — add questions and/or keywords. Body: `{ questions: string[], keywords?: string[] }`.
  *
- * Idempotent by way of the unique index on `(evaluation_id, question)`, so re-posting the
- * same list is safe and the response distinguishes added from already-present.
+ * Questions are stored with is_question=1, keywords with is_question=0.
+ * Both are stored as source='manual' so they're exempt from demand rebuilds.
+ * Idempotent by way of the unique index on `(evaluation_id, question)`.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -49,10 +50,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }
 
-  const raw = (body as { questions?: unknown })?.questions;
-  if (!Array.isArray(raw)) {
+  const rawQuestions = (body as { questions?: unknown })?.questions;
+  const rawKeywords = (body as { keywords?: unknown })?.keywords;
+
+  if (!Array.isArray(rawQuestions) && !Array.isArray(rawKeywords)) {
     return NextResponse.json(
-      { error: "Body must be { questions: string[] }" },
+      { error: "Body must be { questions: string[] } and/or { keywords: string[] }" },
       { status: 400 }
     );
   }
@@ -60,54 +63,45 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Normalise before deduping, or "How much does it cost?" and "how much does it cost?" become
   // two questions and every count downstream is inflated.
   const seen = new Set<string>();
-  const cleaned: string[] = [];
+  const cleaned: { text: string; isQuestion: boolean }[] = [];
   const rejected: { question: string; reason: string }[] = [];
 
-  for (const item of raw) {
-    if (typeof item !== "string") {
-      rejected.push({ question: String(item), reason: "not a string" });
-      continue;
+  const processItems = (items: unknown[], isQuestion: boolean) => {
+    for (const item of items) {
+      if (typeof item !== "string") {
+        rejected.push({ question: String(item), reason: "not a string" });
+        continue;
+      }
+      const text = item.trim().replace(/\s+/g, " ");
+      if (!text) continue;
+      if (text.length > MAX_LENGTH) {
+        rejected.push({ question: text.slice(0, 60) + "…", reason: `longer than ${MAX_LENGTH} chars` });
+        continue;
+      }
+      const key = text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push({ text, isQuestion });
     }
-    const text = item.trim().replace(/\s+/g, " ");
-    if (!text) continue;
-    if (text.length > MAX_LENGTH) {
-      rejected.push({ question: text.slice(0, 60) + "…", reason: `longer than ${MAX_LENGTH} chars` });
-      continue;
-    }
-    const key = text.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(text);
-  }
+  };
+
+  if (Array.isArray(rawQuestions)) processItems(rawQuestions, true);
+  if (Array.isArray(rawKeywords)) processItems(rawKeywords, false);
 
   if (cleaned.length === 0) {
     return NextResponse.json(
-      { error: "No usable questions in body", rejected },
+      { error: "No usable questions or keywords in body", rejected },
       { status: 400 }
     );
   }
   if (cleaned.length > MAX_QUESTIONS) {
     return NextResponse.json(
-      { error: `At most ${MAX_QUESTIONS} questions per request, got ${cleaned.length}` },
+      { error: `At most ${MAX_QUESTIONS} items per request, got ${cleaned.length}` },
       { status: 400 }
     );
   }
 
   // Existing rows for these questions, whatever their source.
-  //
-  // The unique index is on `(evaluation_id, question)` and ignores `source`, so a question
-  // that autocomplete already found cannot simply be inserted as `manual` — `INSERT OR IGNORE`
-  // drops it without a word. Two things then go wrong, and the second is the serious one: the
-  // response claims it was added, and the row keeps `source = 'autocomplete_ddg'`, which means
-  // it is *not* exempt from the rebuild in `/demand` and gets deleted on the next run. A
-  // question the user deliberately chose would vanish.
-  //
-  // So an existing question is promoted rather than inserted. That is also the honest reading
-  // of the request: naming a question by hand makes it a deliberate choice regardless of what
-  // first surfaced it.
-  // Keyed on the lowercased question but carrying the *stored* text, because the UPDATE below
-  // has to match the row as written. Look up "Is It Worth It?" and update by that string and
-  // the match silently fails, leaving the row unpromoted and still due for deletion.
   const existing = new Map(
     (await query<{ question: string; source: string }>(
       "SELECT question, source FROM sub_intents WHERE evaluation_id = ?",
@@ -119,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const promoted: string[] = [];
   const unchanged: string[] = [];
 
-  for (const text of cleaned) {
+  for (const { text, isQuestion } of cleaned) {
     const prior = existing.get(text.toLowerCase());
 
     if (prior?.source === "manual") {
@@ -131,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await run(
         `UPDATE sub_intents SET source = 'manual', is_question = ?
          WHERE evaluation_id = ? AND question = ?`,
-        [isQuestionShaped(text) ? 1 : 0, id, prior.question]
+        [isQuestion ? 1 : 0, id, prior.question]
       );
       promoted.push(text);
       continue;
@@ -140,18 +134,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await run(
       `INSERT OR IGNORE INTO sub_intents (id, evaluation_id, question, source, seed, locale, is_question)
        VALUES (?, ?, ?, 'manual', NULL, NULL, ?)`,
-      [generateId(), id, text, isQuestionShaped(text) ? 1 : 0]
+      [generateId(), id, text, isQuestion ? 1 : 0]
     );
     added.push(text);
   }
 
   return NextResponse.json({
     added: added.length,
-    /** Already present under another source, now `manual` and safe from the demand rebuild. */
     promoted: promoted.length,
     unchanged: unchanged.length,
     total: added.length + promoted.length + unchanged.length,
-    questions: cleaned,
+    questions: cleaned.filter((c) => c.isQuestion).map((c) => c.text),
+    keywords: cleaned.filter((c) => !c.isQuestion).map((c) => c.text),
     rejected,
   });
 }
