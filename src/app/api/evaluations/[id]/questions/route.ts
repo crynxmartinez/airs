@@ -38,6 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
+  try {
   const evaluation = await queryOne<{ id: string }>("SELECT id FROM evaluations WHERE id = ?", [id]);
   if (!evaluation) {
     return NextResponse.json({ error: "Evaluation not found" }, { status: 404 });
@@ -132,8 +133,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     await run(
-      `INSERT OR IGNORE INTO sub_intents (id, evaluation_id, question, source, seed, locale, is_question)
-       VALUES (?, ?, ?, 'manual', NULL, NULL, ?)`,
+      `INSERT INTO sub_intents (id, evaluation_id, question, source, seed, locale, is_question)
+       VALUES (?, ?, ?, 'manual', NULL, NULL, ?)
+       ON CONFLICT (evaluation_id, question) DO NOTHING`,
       [generateId(), id, text, isQuestion ? 1 : 0]
     );
     added.push(text);
@@ -148,6 +150,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     keywords: cleaned.filter((c) => !c.isQuestion).map((c) => c.text),
     rejected,
   });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Failed to save questions: ${msg}` }, { status: 500 });
+  }
 }
 
 /** DELETE — remove one manual question (`?question_id=`) or all of them. */

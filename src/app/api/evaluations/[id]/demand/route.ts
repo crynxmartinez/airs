@@ -124,8 +124,9 @@ export async function POST(
 
     const insert = async (question: string, source: string, seed: string | null, isQuestion: boolean, loc: string | null) =>
       await run(
-        `INSERT OR IGNORE INTO sub_intents (id, evaluation_id, question, source, seed, locale, is_question)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sub_intents (id, evaluation_id, question, source, seed, locale, is_question)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (evaluation_id, question) DO NOTHING`,
         [generateId(), id, question, source, seed, loc, isQuestion ? 1 : 0]
       );
 

@@ -294,6 +294,7 @@ CREATE TABLE IF NOT EXISTS ai_queries (
   query           TEXT NOT NULL,
   engine          TEXT NOT NULL,
   tracked         INTEGER DEFAULT 1,
+  sub_intent_id   TEXT,
   created_at      TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS'))
 );
 
