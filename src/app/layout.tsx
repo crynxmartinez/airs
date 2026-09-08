@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppChrome } from "@/components/app-chrome";
+import { siteUrl, siteDescription } from "@/lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AIRS CRM",
-  description: "AIRS Competitive Analysis & Recommendation Readiness Platform",
+  metadataBase: siteUrl,
+  description: siteDescription,
+  applicationName: "AIRS CRM",
+  robots: { index: false, follow: false },
+  icons: { icon: "/icon.svg", apple: "/apple-icon.png" },
 };
 
 export default function RootLayout({

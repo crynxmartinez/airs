@@ -1,14 +1,11 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, ArrowDown, Check, Plus, Target, FileText, ListChecks, TrendingUp } from "lucide-react";
 import { currentUser } from "@/lib/session";
 import s from "./home.module.css";
+import { publicMetadata, siteUrl, siteDescription } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "AIRS | Competitor Analysis for AI Search",
-  description: "Compare your website with competitors found through AI search. Find content gaps and turn their weaknesses into a clear website improvement plan with AIRS.",
-};
+export const metadata = publicMetadata("AIRS CRM | Competitor Analysis for AI Search", siteDescription, "/");
 
 const faqs = [
   ["What does AIRS do?", "AIRS compares your website with competing pages found through AI search. It identifies missing or incomplete answers and turns those findings into a practical website improvement plan."],
@@ -37,6 +34,13 @@ export default async function Home() {
   if (await currentUser()) redirect("/dashboard");
   return (
     <div className={s.home}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org", "@graph": [
+          { "@type": "Organization", "@id": `${siteUrl.origin}/#organization`, name: "AIRS CRM", alternateName: "AIRS", url: siteUrl.origin, logo: new URL("/airs-logo.svg", siteUrl).toString() },
+          { "@type": "WebSite", "@id": `${siteUrl.origin}/#website`, name: "AIRS CRM", alternateName: "AIRS", url: siteUrl.origin, description: siteDescription, publisher: { "@id": `${siteUrl.origin}/#organization` } },
+          { "@type": "WebPage", "@id": `${siteUrl.origin}/#webpage`, url: siteUrl.origin, name: "AIRS CRM | Competitor Analysis for AI Search", description: siteDescription, isPartOf: { "@id": `${siteUrl.origin}/#website` } },
+        ],
+      }).replace(/</g, "\\u003c") }} />
       <section className={`${s.section} ${s.hero}`} aria-labelledby="home-title">
         <div className={s.grid}>
           <div>

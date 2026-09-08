@@ -65,7 +65,9 @@ export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PAGES.has(pathname) || PUBLIC_API.has(pathname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    if (!["/", "/about", "/contact"].includes(pathname)) response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
   }
 
   const isApi = pathname.startsWith("/api/");
@@ -83,7 +85,9 @@ export default async function proxy(req: NextRequest) {
     return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return response;
 }
 
 /**
