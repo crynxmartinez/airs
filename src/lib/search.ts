@@ -66,6 +66,11 @@ const REGION_BY_SUBDIVISION: Record<string, string> = {
   tennessee: "us-en", texas: "us-en", utah: "us-en", vermont: "us-en",
   virginia: "us-en", washington: "us-en", wisconsin: "us-en", wyoming: "us-en",
   chicago: "us-en", houston: "us-en", "los angeles": "us-en", miami: "us-en",
+  dallas: "us-en", atlanta: "us-en", boston: "us-en", seattle: "us-en",
+  denver: "us-en", phoenix: "us-en", philadelphia: "us-en", "san diego": "us-en",
+  "san francisco": "us-en", "san antonio": "us-en", austin: "us-en",
+  "las vegas": "us-en", portland: "us-en", nashville: "us-en", detroit: "us-en",
+  minneapolis: "us-en", orlando: "us-en", tampa: "us-en", raleigh: "us-en",
   // Canadian provinces.
   ontario: "ca-en", quebec: "ca-en", alberta: "ca-en", manitoba: "ca-en",
   saskatchewan: "ca-en", "nova scotia": "ca-en", "new brunswick": "ca-en",

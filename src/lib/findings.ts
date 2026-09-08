@@ -72,7 +72,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have no Schema.org structured data — only ${c.having} do. This is a wide-open gap: adding Organization, LocalBusiness, Service or FAQPage schema makes your content machine-readable for AI systems while most of the field stays invisible to them.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors already use Schema.org structured data. This is table stakes — without it you are the outlier. Add Organization or Service schema to reach parity.`,
+      `${c.having} of ${c.total} competitors already use Schema.org structured data. This is table stakes — without it you are the outlier. **Add Organization or Service schema to reach parity.**`,
     maxImpact: "high",
   },
   {
@@ -84,7 +84,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors don't use a single clear H1 (average ${c.avg} H1 tags per page). Clean heading hierarchy — one H1 stating the page's subject, with logical H2/H3 beneath — is a cheap structural edge over a field that mostly gets it wrong.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors use exactly one H1. Match that: a single H1 naming the page subject, with H2/H3 nested underneath.`,
+      `${c.having} of ${c.total} competitors use exactly one H1. **Match that: a single H1 naming the page subject, with H2/H3 nested underneath.**`,
     maxImpact: "medium",
   },
   {
@@ -96,7 +96,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors lack a proper semantic navigation menu. A clear <nav> structure helps both users and AI crawlers understand your site's shape.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors have a proper navigation menu. Make sure yours uses a semantic <nav> element.`,
+      `${c.having} of ${c.total} competitors have a proper navigation menu. **Make sure yours uses a semantic <nav> element.**`,
     maxImpact: "medium",
   },
 
@@ -110,7 +110,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have no FAQ section — only ${c.having} do. Answer-first FAQ content is what AI assistants quote directly. Target the questions your buyers actually ask and mark it up with FAQPage schema to take ground the field has left empty.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors publish FAQ content. This is expected in your market — add a FAQ section with FAQPage schema to reach parity.`,
+      `${c.having} of ${c.total} competitors publish FAQ content. This is expected in your market — **add a FAQ section with FAQPage schema to reach parity.**`,
     maxImpact: "high",
   },
   {
@@ -122,7 +122,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors publish no pricing at all. Pricing transparency is a genuine differentiator here — buyers comparing options can't get an answer from ${c.lacking} of them, and AI assistants can't recommend on cost when nobody states one.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors publish pricing. Staying silent on cost makes you the harder option to evaluate — publish rates, ranges, or a starting-from price.`,
+      `${c.having} of ${c.total} competitors publish pricing. Staying silent on cost makes you the harder option to evaluate — **publish rates, ranges, or a starting-from price.**`,
     maxImpact: "medium",
   },
   {
@@ -134,7 +134,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have thin pages under 500 words (field average ${c.avg} words). Comprehensive, specific content wins on depth against a shallow field — aim well past the average rather than just clearing 500.`,
     parity: (c) =>
-      `The field averages ${c.avg} words per page and ${c.having} of ${c.total} competitors clear 500. Depth alone won't differentiate you here — compete on specificity and angle instead.`,
+      `The field averages ${c.avg} words per page and ${c.having} of ${c.total} competitors clear 500. Depth alone won't differentiate you here — **compete on specificity and angle instead.**`,
     maxImpact: "medium",
   },
 
@@ -148,7 +148,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors show no reviews or testimonials. Social proof is the most persuasive trust signal there is and most of this field has none — publish named testimonials with Review/AggregateRating schema.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors display reviews or testimonials. Without visible social proof you look weaker than the field — collect and publish them with Review schema.`,
+      `${c.having} of ${c.total} competitors display reviews or testimonials. Without visible social proof you look weaker than the field — **collect and publish them with Review schema.**`,
     maxImpact: "high",
   },
   {
@@ -160,7 +160,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors don't surface reachable contact details. Being obviously contactable — a real phone number, email and address in machine-readable form — is a trust edge over a field that hides.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors surface clear contact details. Publish yours with tel:/mailto: links and a PostalAddress so both users and AI can find them.`,
+      `${c.having} of ${c.total} competitors surface clear contact details. **Publish yours with tel:/mailto: links and a PostalAddress so both users and AI can find them.**`,
     maxImpact: "medium",
   },
   {
@@ -172,7 +172,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors never mention licenses, certifications or accreditation. Displaying real credentials prominently separates you from a field that offers no proof of competence.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors display credentials. Show your licenses and certifications to match the field's baseline.`,
+      `${c.having} of ${c.total} competitors display credentials. **Show your licenses and certifications to match the field's baseline.**`,
     maxImpact: "medium",
   },
   {
@@ -184,7 +184,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors publish content with no identifiable author. Named, credentialed authors are a direct expertise signal — attribute your content and link to real bios.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors attribute their content to named authors. Add bylines and author bios to match.`,
+      `${c.having} of ${c.total} competitors attribute their content to named authors. **Add bylines and author bios to match.**`,
     maxImpact: "low",
   },
 
@@ -198,7 +198,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have no mobile viewport meta tag, so their pages break on phones. Being properly mobile-ready is an easy win against them.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors are mobile-ready. A viewport meta tag is the bare minimum — make sure you have one.`,
+      `${c.having} of ${c.total} competitors are mobile-ready. A viewport meta tag is the bare minimum — **make sure you have one.**`,
     maxImpact: "high",
   },
   {
@@ -210,7 +210,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have poor image alt text coverage (field average ${c.avg}%). Full alt text coverage helps accessibility, image search and AI comprehension at once.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors have good alt text coverage (field average ${c.avg}%). Keep yours near 100%.`,
+      `${c.having} of ${c.total} competitors have good alt text coverage (field average ${c.avg}%). **Keep yours near 100%.**`,
     maxImpact: "medium",
   },
 
@@ -224,7 +224,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors don't serve their site over HTTPS. Browsers flag those pages as insecure — being properly secured is a visible advantage.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors use HTTPS. It is a baseline requirement, not a differentiator — make sure all HTTP traffic redirects to HTTPS.`,
+      `${c.having} of ${c.total} competitors use HTTPS. It is a baseline requirement, not a differentiator — **make sure all HTTP traffic redirects to HTTPS.**`,
     maxImpact: "high",
   },
   {
@@ -236,7 +236,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors load slower than 2 seconds (field average ${c.avg}ms). Speed is a real competitive lever here — compress images, minify assets, enable brotli and put a CDN in front.`,
     parity: (c) =>
-      `The field loads in ${c.avg}ms on average and ${c.having} of ${c.total} competitors are under 2 seconds. You need to be fast just to keep up.`,
+      `The field loads in ${c.avg}ms on average and ${c.having} of ${c.total} competitors are under 2 seconds. **You need to be fast just to keep up.**`,
     maxImpact: "medium",
   },
   {
@@ -248,7 +248,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors have no canonical tags, leaving them exposed to duplicate-content dilution. Canonicalising your pages is a cheap technical edge.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors set canonical tags. Add yours to avoid duplicate-content issues.`,
+      `${c.having} of ${c.total} competitors set canonical tags. **Add yours to avoid duplicate-content issues.**`,
     maxImpact: "medium",
   },
   {
@@ -262,7 +262,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors leave indexing directives implicit. Setting robots meta explicitly is optional housekeeping — the default is already index,follow — but it removes ambiguity for AI crawlers.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors set an explicit robots meta tag. Optional, but harmless to match.`,
+      `${c.having} of ${c.total} competitors set an explicit robots meta tag. Optional, but harmless to match. **Set one to remove ambiguity for AI crawlers.**`,
     maxImpact: "low",
   },
 
@@ -276,7 +276,7 @@ const INDICATORS: IndicatorSpec[] = [
     gap: (c) =>
       `${c.lacking} of ${c.total} competitors link to no social profiles at all. An active, linked presence off your own domain signals a real operating business where the field shows none.`,
     parity: (c) =>
-      `${c.having} of ${c.total} competitors link to social profiles. Link yours from the footer with matching sameAs schema.`,
+      `${c.having} of ${c.total} competitors link to social profiles. **Link yours from the footer with matching sameAs schema.**`,
     maxImpact: "medium",
   },
 ];
@@ -357,10 +357,10 @@ export async function generateFindings(evaluationId: string): Promise<Finding[]>
       impact = resolveImpact(gapRate, spec.maxImpact);
       description = spec.gap(ctx);
     } else if (gapRate <= PARITY_MAX_GAP) {
-      // The field has it. Worth matching, never worth ranking as an edge.
+      // The field has it and your site doesn't. High impact — you're the outlier.
       type = "gap";
-      impact = "low";
-      description = spec.parity(ctx);
+      impact = "high";
+      description = `Your site does not have this. ${spec.parity(ctx)}`;
     } else {
       // Mixed field: some have it, some don't. No edge either way — emitting
       // this is what produced the old checklist noise.

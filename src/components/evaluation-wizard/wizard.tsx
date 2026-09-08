@@ -160,6 +160,7 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
   // Step 3 state
   const [scrapingAll, setScrapingAll] = useState(false);
   const [evidenceCount, setEvidenceCount] = useState(0);
+  const [selfError, setSelfError] = useState<string | null>(null);
 
   // Step 4 state
   const [evaluationId, setEvaluationId] = useState<string | null>(null);
@@ -424,6 +425,27 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
         await scrapeCompetitor(i);
       }
     }
+
+    // Crawl and score the client's own site too.
+    //
+    // `/self` registers the evaluation's `digital_asset_url` as a `competitor_type: 'self'`
+    // row, crawls it through the same pipeline, and re-runs scoring. Nothing in the app called
+    // it, so every evaluation ever created through this wizard had no self row — which is why
+    // the report's headline "Where You Stand" section showed "— / 93 · Not yet scored" for
+    // every dimension. The comparison that the whole document is built around was empty.
+    //
+    // It runs last, after the field is crawled, because it re-runs scoring across every row.
+    // Failure is non-fatal: the competitor evidence is already saved, and a launch that stops
+    // here would lose it.
+    try {
+      const res = await fetch(`/api/evaluations/${evaluationId}/self`, { method: "POST" });
+      const data = await res.json();
+      if (data?.evidence_count) setEvidenceCount((prev) => prev + data.evidence_count);
+      if (data?.error) setSelfError(`Could not analyse your own site: ${data.error}`);
+    } catch {
+      setSelfError("Could not analyse your own site — the report will show no 'your site' column.");
+    }
+
     setScrapingAll(false);
   }
 
@@ -820,11 +842,18 @@ export function EvaluationWizard({ projectId }: { projectId: string }) {
 
         {step === 2 && (
           <div className="space-y-5">
+            {selfError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {selfError}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium text-slate-800">Crawl & Collect Evidence</h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Crawls homepage + about, services, contact pages. Falls back to browser rendering for JS-heavy sites.
+                  Crawls homepage + about, services, contact pages — your own site included, so the
+                  report can compare you against the field. Falls back to browser rendering for
+                  JS-heavy sites.
                 </p>
               </div>
               <Button onClick={scrapeAll} disabled={scrapingAll || selectedCompetitors.length === 0}>

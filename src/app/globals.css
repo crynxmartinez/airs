@@ -64,13 +64,27 @@ body {
   page-break-before: always;
 }
 
+.report-cover {
+  break-after: page;
+  page-break-after: always;
+}
+
+.report-body > .report-section:first-child {
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
 /* ---------------------------------------------------------------- print */
 
 @page {
   size: A4;
-  /* The running header/footer are drawn by the document itself, so the page margin
-     only needs to clear the printer's unprintable edge. */
   margin: 12mm 12mm 14mm;
+  @bottom-center {
+    content: "AIRS — AI Search Visibility Evaluation";
+    font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+    font-size: 9px;
+    color: #94a3b8;
+  }
 }
 
 @media print {

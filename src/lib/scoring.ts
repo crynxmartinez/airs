@@ -272,16 +272,23 @@ export async function calculateScores(evaluationId: string): Promise<ScoringResu
     await run("UPDATE competitors SET score = ? WHERE id = ?", [overallScore, competitors[i].id]);
   }
 
-  // The evaluation's RRS describes the competitive field, so your own asset is
-  // scored above (its dimension scores are stored) but excluded from the average.
+  // The evaluation's RRS describes the client's own site when a self competitor
+  // exists. Falls back to the field average when no self-site is registered.
+  const selfResult = results.find((r) => {
+    const comp = competitors.find((c) => c.id === r.competitorId);
+    return comp?.competitor_type === "self";
+  });
+
   const fieldResults = results.filter((r) => {
     const comp = competitors.find((c) => c.id === r.competitorId);
     return comp?.competitor_type !== "self";
   });
 
-  const avgScore = fieldResults.length > 0
+  const fieldAvg = fieldResults.length > 0
     ? Math.round(fieldResults.reduce((sum, r) => sum + r.overallScore, 0) / fieldResults.length)
     : 0;
+
+  const rrsScore = selfResult ? selfResult.overallScore : fieldAvg;
 
   const totalEvidence = (await query<{ count: number }>(
     "SELECT COUNT(*) as count FROM evidence WHERE evaluation_id = ?",
@@ -292,7 +299,7 @@ export async function calculateScores(evaluationId: string): Promise<ScoringResu
 
   await run(
     "UPDATE evaluations SET rrs_score = ?, confidence_score = ?, rating = ?, status = 'completed', updated_at = to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = ?",
-    [avgScore, confidenceScore, getRating(avgScore), evaluationId]
+    [rrsScore, confidenceScore, getRating(rrsScore), evaluationId]
   );
 
   return results;

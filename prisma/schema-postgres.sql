@@ -380,3 +380,57 @@ CREATE TABLE IF NOT EXISTS search_citations (
 
 CREATE INDEX IF NOT EXISTS idx_search_citations_project ON search_citations(project_id);
 CREATE INDEX IF NOT EXISTS idx_search_citations_query ON search_citations(project_id, query);
+
+-- ---------------------------------------------------------------------------
+-- Access control. One operator, plus whoever they deliberately hand an account
+-- to. There is no public sign-up route by design: accounts are created with
+-- `npm run create-user`, which only runs on a machine that already has the
+-- database credentials. A door that does not exist cannot be forced.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  email         TEXT NOT NULL,
+  -- scrypt, stored as "salt:hash" in hex. Not bcrypt or argon2: both need a
+  -- compiled native binary, and this project already had to drop
+  -- better-sqlite3 because Windows Smart App Control blocked its unsigned
+  -- prebuilt .node file. scrypt ships inside Node and cannot break that way.
+  password_hash TEXT NOT NULL,
+  name          TEXT,
+  created_at    TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+  last_login_at TEXT
+);
+
+-- Email is the login, so it must be unique. Lowercased before every write and
+-- every lookup, because "El@..." and "el@..." are the same person and two rows
+-- would mean one of them silently cannot log in.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email));
+
+CREATE TABLE IF NOT EXISTS sessions (
+  -- 32 random bytes from crypto.randomBytes, hex. Deliberately NOT generateId()
+  -- from db.ts: that uses Math.random(), which is fine for a row id and
+  -- predictable enough to be forged as a session token.
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+  expires_at TEXT NOT NULL,
+  user_agent TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- Contact form submissions. Stored rather than emailed: no mail service, no
+-- extra account, no extra secret. Read them at /messages behind the login.
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  email      TEXT NOT NULL,
+  company    TEXT,
+  message    TEXT NOT NULL,
+  source_ip  TEXT,
+  created_at TEXT DEFAULT (to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS')),
+  read_at    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_messages_created ON contact_messages(created_at);

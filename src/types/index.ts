@@ -36,6 +36,7 @@ export interface Competitor {
   competitor_type: "self" | "direct" | "functional" | "platform" | "informational" | "ai_generated" | null;
   score: number | null;
   created_at: string;
+  discovered_via: string | null;
 }
 
 export interface Evidence {

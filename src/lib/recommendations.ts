@@ -456,13 +456,31 @@ export async function generateRecommendations(evaluationId: string): Promise<Rec
 
   if (findings.length === 0) return [];
 
+  // The field is the rivals, never the client's own site.
+  //
+  // `findings.ts` has always excluded `self`; this did not, so once the self row started being
+  // registered a recommendation read "2 of 10 competitors don't use a single clear H1" on an
+  // evaluation with nine rivals — counting the client's own site among the businesses it is
+  // being compared against. It also skews the number in the worst direction: the client's site
+  // lacks the thing being recommended, so including it inflates the "don't have it" side of
+  // every prevalence figure in the document.
   const competitors = await query<Competitor>(
-    "SELECT * FROM competitors WHERE evaluation_id = ?",
+    "SELECT * FROM competitors WHERE evaluation_id = ? AND (competitor_type IS NULL OR competitor_type != 'self')",
     [evaluationId]
   );
 
+  // Field evidence only — the client's own rows are excluded here too.
+  //
+  // Every prevalence sentence in this file is phrased "N of ev.length competitors", so `ev`
+  // *is* the denominator. Filtering the competitor list above is not enough: once the self row
+  // started being crawled its 20 evidence rows landed in here, and a nine-rival evaluation
+  // began reporting "2 of 10 competitors". Worse, the client's site is by definition the one
+  // missing the thing being recommended, so its presence pushes every figure the wrong way.
   const evidence = await query<Evidence>(
-    "SELECT * FROM evidence WHERE evaluation_id = ?",
+    `SELECT e.* FROM evidence e
+       JOIN competitors c ON c.id = e.competitor_id
+      WHERE e.evaluation_id = ?
+        AND (c.competitor_type IS NULL OR c.competitor_type != 'self')`,
     [evaluationId]
   );
 

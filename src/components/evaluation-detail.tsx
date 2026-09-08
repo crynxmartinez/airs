@@ -52,6 +52,7 @@ const catLabels: Record<string, string> = {
 
 const ratingColors: Record<string, string> = {
   platinum: "bg-purple-100 text-purple-700 border-purple-200",
+  excellent: "bg-purple-100 text-purple-700 border-purple-200",
   gold: "bg-yellow-100 text-yellow-700 border-yellow-200",
   silver: "bg-slate-100 text-slate-700 border-slate-200",
   bronze: "bg-orange-100 text-orange-700 border-orange-200",
@@ -66,6 +67,14 @@ const ratingDesc: Record<string, string> = {
   foundation: "Poor — major improvements required",
 };
 
+function getRating(score: number): string {
+  if (score >= 90) return "platinum";
+  if (score >= 75) return "gold";
+  if (score >= 60) return "silver";
+  if (score >= 40) return "bronze";
+  return "foundation";
+}
+
 export function EvaluationDetail() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -78,13 +87,14 @@ export function EvaluationDetail() {
   const [scoring, setScoring] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [findingFilter, setFindingFilter] = useState<"all" | "high" | "medium" | "standards">("all");
+  const [findingFilter, setFindingFilter] = useState<"all" | "high" | "opportunity">("all");
   const [openCompetitor, setOpenCompetitor] = useState<string | null>(null);
   const [creatingMission, setCreatingMission] = useState(false);
   const [missionError, setMissionError] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [missionExists, setMissionExists] = useState(false);
   const [checkingMission, setCheckingMission] = useState(true);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
     Promise.all([
@@ -128,6 +138,19 @@ export function EvaluationDetail() {
     setScoring(false);
   }
 
+  async function handleRemoveCompetitor(competitorId: string) {
+    setRemovingId(competitorId);
+    try {
+      const res = await fetch(`/api/evaluations/${evaluationId}/competitors?competitorId=${competitorId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Failed to remove competitor"); }
+
+      loadData();
+    } catch (err) {
+      setScoreError(err instanceof Error ? err.message : "Failed to remove competitor");
+    }
+    setRemovingId(null);
+  }
+
   async function handleCreateMission() {
     setCreatingMission(true);
     setMissionError(null);
@@ -168,27 +191,42 @@ export function EvaluationDetail() {
   );
 
   const radarData = dimKeys.map((dim) => {
-    const ds = scores.filter((s) => normalizeDimCode(s.dimension_code) === dim);
+    const ds = scores.filter((s) => {
+      const comp = evaluation.competitors.find((c) => c.id === s.competitor_id);
+      return normalizeDimCode(s.dimension_code) === dim && comp?.competitor_type !== "self";
+    });
     const avg = ds.length > 0 ? Math.round(ds.reduce((a, s) => a + s.score, 0) / ds.length) : 0;
     return { dimension: dimLabels[dim], score: avg };
   });
 
-  // Executive summary data
+  // Self vs field competitors
+  const selfCompetitor = evaluation.competitors.find((c) => c.competitor_type === "self");
+  const fieldCompetitors = evaluation.competitors.filter((c) => c.competitor_type !== "self");
+  const selfScores = selfCompetitor ? scores.filter((s) => s.competitor_id === selfCompetitor.id) : [];
+  const selfOverall = selfCompetitor?.score ?? null;
+
+  // Field-only dimension averages (exclude self from field stats)
   const dimAvgs = dimKeys.map((dim) => {
-    const ds = scores.filter((s) => normalizeDimCode(s.dimension_code) === dim);
+    const ds = scores.filter((s) => {
+      const comp = evaluation.competitors.find((c) => c.id === s.competitor_id);
+      return normalizeDimCode(s.dimension_code) === dim && comp?.competitor_type !== "self";
+    });
     const avg = ds.length > 0 ? Math.round(ds.reduce((a, s) => a + s.score, 0) / ds.length) : 0;
     return { key: dim, label: dimLabels[dim], avg };
   });
   const weakestDims = dimAvgs.filter((d) => d.avg < 60).sort((a, b) => a.avg - b.avg);
   const strongestDims = dimAvgs.filter((d) => d.avg >= 75).sort((a, b) => b.avg - a.avg);
-  const topCompetitor = [...evaluation.competitors].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
-  const bottomCompetitor = [...evaluation.competitors].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
+  const topCompetitor = [...fieldCompetitors].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+  const bottomCompetitor = [...fieldCompetitors].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
+  const fieldAvg = fieldCompetitors.length > 0
+    ? Math.round(fieldCompetitors.reduce((a, c) => a + (c.score ?? 0), 0) / fieldCompetitors.length)
+    : 0;
 
   // "opportunity" is a gap most of the field shares — a genuine opening. "gap" is
-  // parity work the field already has. Legacy rows use weakness/standard.
+  // parity work the field already has and your site doesn't — high impact.
   const opportunityFindings = findings.filter((f) => f.type === "opportunity" || f.type === "weakness");
-  const standardFindings = findings.filter((f) => f.type === "gap" || f.type === "standard");
-  const allActionable = [...opportunityFindings, ...standardFindings];
+  const highImpactFindings = findings.filter((f) => f.type === "gap" || f.type === "standard");
+  const allActionable = [...highImpactFindings, ...opportunityFindings];
 
   // Mirrors the scoping rule in lib/findings.ts: gap prevalence is measured over
   // contestable rivals, falling back to every result when too few are classified.
@@ -197,14 +235,11 @@ export function EvaluationDetail() {
   );
   const analysisBasisIsFallback =
     evaluation.competitors.length > 0 && primaryCompetitors.length < 3;
-  const highImpact = opportunityFindings.filter((f) => f.impact_level === "high");
-  const mediumImpact = opportunityFindings.filter((f) => f.impact_level === "medium");
 
   const filteredFindings = (() => {
     switch (findingFilter) {
-      case "high": return highImpact;
-      case "medium": return mediumImpact;
-      case "standards": return standardFindings;
+      case "high": return highImpactFindings;
+      case "opportunity": return opportunityFindings;
       default: return allActionable;
     }
   })();
@@ -225,7 +260,7 @@ export function EvaluationDetail() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{evaluation.primary_query}</h1>
-            <p className="mt-0.5 text-sm text-slate-500 capitalize">{evaluation.search_intent} intent · {evaluation.competitors.length} competitors · {evaluation.evidence.length} evidence</p>
+            <p className="mt-0.5 text-sm text-slate-500 capitalize">{evaluation.search_intent} intent · {fieldCompetitors.length} competitors · {evaluation.evidence.length} evidence</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -345,12 +380,15 @@ export function EvaluationDetail() {
         </div>
       )}
 
-      {/* Score Summary */}
+      {/* Score Summary — Your Site vs Field */}
       {evaluation.rrs_score !== null && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <p className="text-sm font-medium text-slate-500">Overall RRS</p>
+            <p className="text-sm font-medium text-slate-500">{selfCompetitor ? "Your Site Score" : "Overall RRS"}</p>
             <p className="mt-2 text-4xl font-bold text-slate-900">{evaluation.rrs_score}<span className="text-base text-slate-400">/100</span></p>
+            {selfCompetitor && fieldCompetitors.length > 0 && (
+              <p className="mt-1 text-xs text-slate-400">Field average: {fieldAvg}/100</p>
+            )}
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <p className="text-sm font-medium text-slate-500">Rating</p>
@@ -365,14 +403,55 @@ export function EvaluationDetail() {
         </div>
       )}
 
+      {/* Your Site Card */}
+      {selfCompetitor && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-blue-600" />
+              <h2 className="text-sm font-semibold text-slate-800">Your Site — {selfCompetitor.url}</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-slate-900">{selfOverall ?? "—"}<span className="text-sm text-slate-400">/100</span></span>
+              {selfCompetitor.score !== null && (
+                <span className={`rounded-lg border px-2 py-0.5 text-xs font-bold capitalize ${ratingColors[selfCompetitor.score >= 85 ? "excellent" : selfCompetitor.score >= 70 ? "gold" : selfCompetitor.score >= 50 ? "silver" : "foundation"]}`}>{getRating(selfCompetitor.score)}</span>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            {dimKeys.map((dim) => {
+              const v = selfScores.find((s) => normalizeDimCode(s.dimension_code) === dim)?.score;
+              const fieldAvgForDim = dimAvgs.find((d) => d.key === dim)?.avg ?? 0;
+              const diff = v != null ? v - fieldAvgForDim : null;
+              return (
+                <div key={dim} className="rounded-lg border border-slate-200 bg-white p-3">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{dimLabels[dim]}</p>
+                  <p className={`mt-1 text-lg font-bold ${v == null ? "text-slate-300" : v >= 75 ? "text-green-600" : v >= 50 ? "text-yellow-600" : "text-red-500"}`}>{v ?? "—"}</p>
+                  {diff !== null && (
+                    <p className={`text-[10px] ${diff > 0 ? "text-green-500" : diff < 0 ? "text-red-400" : "text-slate-400"}`}>
+                      {diff > 0 ? "+" : ""}{diff} vs field
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Executive Summary */}
       {scores.length > 0 && (
         <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Summary</h2>
           <div className="space-y-2 text-sm text-slate-700">
+            {selfCompetitor && selfOverall !== null && (
+              <p>
+                <strong>Your site scores {selfOverall}/100</strong> — {selfOverall >= fieldAvg ? `above` : `below`} the field average of {fieldAvg}/100.
+              </p>
+            )}
             {topCompetitor && (
               <p>
-                <strong>{topCompetitor.competitor_name || topCompetitor.url}</strong> is the top performer
+                <strong>{topCompetitor.competitor_name || topCompetitor.url}</strong> is the top competitor
                 with a score of <strong>{topCompetitor.score}/100</strong>
                 {bottomCompetitor && bottomCompetitor.id !== topCompetitor.id && (
                   <>, while <strong>{bottomCompetitor.competitor_name || bottomCompetitor.url}</strong> is the weakest at <strong>{bottomCompetitor.score}/100</strong>.</>
@@ -381,22 +460,19 @@ export function EvaluationDetail() {
               </p>
             )}
             {weakestDims.length > 0 && (
-              <p><strong>Needs work:</strong> {weakestDims.map((d) => `${d.label} (${d.avg}/100)`).join(", ")}</p>
+              <p><strong>Competitor scores — Field weaknesses:</strong> {weakestDims.map((d) => `${d.label} (${d.avg}/100)`).join(", ")}</p>
             )}
             {strongestDims.length > 0 && (
-              <p><strong>Doing well:</strong> {strongestDims.map((d) => `${d.label} (${d.avg}/100)`).join(", ")}</p>
+              <p><strong>Competitor scores — Field strengths:</strong> {strongestDims.map((d) => `${d.label} (${d.avg}/100)`).join(", ")}</p>
             )}
-            {opportunityFindings.length > 0 ? (
+            {highImpactFindings.length > 0 && (
               <p>
-                <strong className="text-blue-600">{opportunityFindings.length} opportunit{opportunityFindings.length > 1 ? "ies" : "y"}</strong> found
-                {highImpact.length > 0 && <> — {highImpact.length} with high impact</>}
-                {" "}— gaps most of this field shares. See recommendations below.
+                <strong className="text-red-600">{highImpactFindings.length} high-impact finding{highImpactFindings.length > 1 ? "s" : ""}</strong> — your site is missing things most competitors already have.
               </p>
-            ) : standardFindings.length > 0 && (
+            )}
+            {opportunityFindings.length > 0 && (
               <p>
-                <strong className="text-slate-700">No majority weakness found</strong> — this field has no gap that most competitors share,
-                so there is no technical opening to exploit here. {standardFindings.length} table-stakes item{standardFindings.length > 1 ? "s" : ""} remain
-                to reach parity. To find a real edge, compete on positioning and content angle, or classify more direct competitors.
+                <strong className="text-blue-600">{opportunityFindings.length} opportunit{opportunityFindings.length > 1 ? "ies" : "y"}</strong> found — gaps most of the field shares. See recommendations below.
               </p>
             )}
             {recs.length > 0 && (
@@ -426,18 +502,24 @@ export function EvaluationDetail() {
 
       {/* Competitors */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="border-b border-slate-200 px-5 py-3"><h2 className="text-sm font-semibold text-slate-800">Competitors ({evaluation.competitors.length})</h2></div>
-        {evaluation.competitors.length > 0 ? (
+        <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Competitors ({fieldCompetitors.length})</h2>
+          {fieldCompetitors.some((c) => (c.score ?? 0) === 0) && (
+            <span className="text-xs text-slate-400">Click the trash icon to remove zero-score competitors, then rescore</span>
+          )}
+        </div>
+        {fieldCompetitors.length > 0 ? (
           <table className="w-full text-sm">
             <thead><tr className="border-b border-slate-100 text-left text-xs font-medium text-slate-500">
               <th className="px-5 py-2.5">Competitor</th><th className="px-5 py-2.5">Score</th>
               {dimKeys.map(d => <th key={d} className="px-3 py-2.5" title={dimLabels[d]}>{dimLabels[d]}</th>)}
+              <th className="px-3 py-2.5"></th>
             </tr></thead>
             <tbody>
-              {evaluation.competitors.map((comp) => {
+              {fieldCompetitors.map((comp) => {
                 const cs = scores.filter((s) => s.competitor_id === comp.id);
                 return (
-                  <tr key={comp.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={comp.id} className={`border-b border-slate-50 hover:bg-slate-50 ${(comp.score ?? 0) === 0 ? "bg-red-50/30" : ""}`}>
                     <td className="px-5 py-3"><div className="flex items-center gap-2"><Globe className="h-4 w-4 text-slate-400" /><a href={comp.url} target="_blank" className="font-medium text-slate-800 hover:text-blue-600">{comp.competitor_name || comp.url}</a></div></td>
                     <td className="px-5 py-3 font-bold text-slate-800">{comp.score ?? "—"}</td>
                     {dimKeys.map(dim => {
@@ -445,6 +527,16 @@ export function EvaluationDetail() {
                       const sv = v ?? 0;
                       return <td key={dim} className="px-3 py-3"><span className={`text-xs font-medium ${sv >= 75 ? "text-green-600" : sv >= 50 ? "text-yellow-600" : "text-red-500"}`}>{v ?? "—"}</span></td>;
                     })}
+                    <td className="px-3 py-3">
+                      <button
+                        onClick={() => handleRemoveCompetitor(comp.id)}
+                        disabled={removingId === comp.id}
+                        className="rounded p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        title="Remove competitor and rescore"
+                      >
+                        {removingId === comp.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -454,14 +546,13 @@ export function EvaluationDetail() {
       </div>
 
       {/* Findings */}
-      {(opportunityFindings.length > 0 || standardFindings.length > 0) && (
+      {(opportunityFindings.length > 0 || highImpactFindings.length > 0) && (
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-800">
               {findingFilter === "all" && `Findings (${allActionable.length})`}
-              {findingFilter === "high" && `Opportunities — High Impact (${highImpact.length})`}
-              {findingFilter === "medium" && `Opportunities — Medium Impact (${mediumImpact.length})`}
-              {findingFilter === "standards" && `Table Stakes (${standardFindings.length})`}
+              {findingFilter === "high" && `High Impact (${highImpactFindings.length})`}
+              {findingFilter === "opportunity" && `Opportunities (${opportunityFindings.length})`}
             </h2>
           </div>
           {analysisBasisIsFallback && (
@@ -483,37 +574,41 @@ export function EvaluationDetail() {
               onClick={() => setFindingFilter("high")}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${findingFilter === "high" ? "bg-red-500 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
             >
-              High Impact ({highImpact.length})
+              High Impact ({highImpactFindings.length})
             </button>
             <button
-              onClick={() => setFindingFilter("medium")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${findingFilter === "medium" ? "bg-yellow-500 text-white" : "bg-yellow-50 text-yellow-600 hover:bg-yellow-100"}`}
+              onClick={() => setFindingFilter("opportunity")}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${findingFilter === "opportunity" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 hover:bg-blue-100"}`}
             >
-              Medium ({mediumImpact.length})
-            </button>
-            <button
-              onClick={() => setFindingFilter("standards")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${findingFilter === "standards" ? "bg-green-600 text-white" : "bg-green-50 text-green-600 hover:bg-green-100"}`}
-            >
-              Table Stakes ({standardFindings.length})
+              Opportunities ({opportunityFindings.length})
             </button>
           </div>
           {filteredFindings.length > 0 ? (
             <div className="divide-y divide-slate-50">
               {filteredFindings.map((f) => {
-                const Icon = f.impact_level === "high" ? AlertTriangle : f.impact_level === "medium" ? AlertCircle : CheckCircle2;
-                const color = f.impact_level === "high" ? "text-red-500" : f.impact_level === "medium" ? "text-yellow-500" : "text-green-500";
+                const isHighImpact = f.type === "gap" || f.type === "standard";
+                const Icon = isHighImpact ? AlertTriangle : Lightbulb;
+                const color = isHighImpact ? "text-red-500" : "text-blue-500";
                 const comp = evaluation.competitors.find((c) => c.id === f.competitor_id);
+                const desc = f.description || "";
+                const boldMatch = desc.match(/\*\*(.+?)\*\*/);
+                const beforeBold = boldMatch ? desc.slice(0, boldMatch.index) : desc;
+                const boldText = boldMatch ? boldMatch[1] : "";
+                const afterBold = boldMatch ? desc.slice((boldMatch.index ?? 0) + boldMatch[0].length) : "";
                 return (
                   <div key={f.id} className="flex items-start gap-3 px-5 py-3">
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{dimLabels[normalizeDimCode(f.dimension_code)] || f.dimension_code || "General"}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${f.impact_level === "high" ? "bg-red-100 text-red-700" : f.impact_level === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>{f.type === "gap" || f.type === "standard" ? "Table stakes" : "Opportunity"}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${isHighImpact ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{isHighImpact ? "High Impact" : "Opportunity"}</span>
                         {comp && <span className="text-xs text-slate-400">{comp.competitor_name || comp.url}</span>}
                       </div>
-                      <p className="mt-1 text-sm text-slate-700">{f.description}</p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        {beforeBold}
+                        {boldText && <span className="font-semibold text-red-600">{boldText}</span>}
+                        {afterBold}
+                      </p>
                     </div>
                   </div>
                 );
@@ -533,19 +628,40 @@ export function EvaluationDetail() {
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="border-b border-slate-200 px-5 py-3"><h2 className="text-sm font-semibold text-slate-800">Recommendations ({recs.length})</h2></div>
           <div className="divide-y divide-slate-50">
-            {recs.map((rec, i) => (
-              <div key={rec.id} className="px-5 py-4"><div className="flex items-start gap-3">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{i+1}</div>
-                <div><div className="flex items-center gap-2 flex-wrap">
-                  <Lightbulb className="h-4 w-4 text-blue-500" />
-                  <p className="text-sm font-medium text-slate-800">{rec.title}</p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${rec.priority === "high" ? "bg-red-100 text-red-700" : rec.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-slate-100 text-slate-500"}`}>{rec.priority}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize">{rec.effort} effort</span>
+            {recs.map((rec, i) => {
+              const desc = rec.description || "";
+              const stepsIdx = desc.indexOf("Action steps:");
+              const summary = stepsIdx >= 0 ? desc.slice(0, stepsIdx).trim() : desc.trim();
+              const stepsBlock = stepsIdx >= 0 ? desc.slice(stepsIdx + "Action steps:".length).trim() : "";
+              const steps = stepsBlock.split("\n").map(s => s.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
+              return (
+                <div key={rec.id} className="px-5 py-4"><div className="flex items-start gap-3">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{i+1}</div>
+                  <div className="flex-1"><div className="flex items-center gap-2 flex-wrap">
+                    <Lightbulb className="h-4 w-4 text-blue-500" />
+                    <p className="text-sm font-medium text-slate-800">{rec.title}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${rec.priority === "high" ? "bg-red-100 text-red-700" : rec.priority === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-slate-100 text-slate-500"}`}>{rec.priority}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize">{rec.effort} effort</span>
+                  </div>
+                  {summary && <p className="mt-1.5 text-sm text-slate-600">{summary}</p>}
+                  {steps.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Action steps</p>
+                      <ul className="mt-1 space-y-1">
+                        {steps.map((step, si) => (
+                          <li key={si} className="flex items-start gap-2 text-sm text-slate-600">
+                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-400" />
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {rec.expected_impact && <p className="mt-2 text-xs font-medium text-green-600">Expected impact: {rec.expected_impact.replace(/\bD[1-7]\b/g, (m) => dimLabels[legacyMap[m]] || m)}</p>}
                 </div>
-                {rec.description && <p className="mt-1 text-sm text-slate-600 whitespace-pre-line">{rec.description}</p>}
-                {rec.expected_impact && <p className="mt-1 text-xs font-medium text-green-600">Impact: {rec.expected_impact.replace(/\bD[1-7]\b/g, (m) => dimLabels[legacyMap[m]] || m)}</p>}</div>
               </div></div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

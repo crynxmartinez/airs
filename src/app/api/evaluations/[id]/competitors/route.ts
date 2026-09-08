@@ -14,6 +14,39 @@ export async function GET(
   return NextResponse.json(competitors);
 }
 
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const competitorId = req.nextUrl.searchParams.get("competitorId");
+
+    if (!competitorId) {
+      return NextResponse.json({ error: "competitorId is required" }, { status: 400 });
+    }
+
+    // Verify competitor belongs to this evaluation
+    const comp = await queryOne<{ id: string; competitor_type: string | null }>(
+      "SELECT id, competitor_type FROM competitors WHERE id = ? AND evaluation_id = ?",
+      [competitorId, id]
+    );
+    if (!comp) {
+      return NextResponse.json({ error: "Competitor not found" }, { status: 404 });
+    }
+
+    // Foreign keys have ON DELETE CASCADE — deleting the competitor
+    // automatically removes page_content, evidence, dimension_scores, coverage.
+    await run("DELETE FROM competitors WHERE id = ?", [competitorId]);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[competitors DELETE] error:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: `Failed to delete competitor: ${msg}` }, { status: 500 });
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
